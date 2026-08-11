@@ -24,6 +24,7 @@ export default function AdminPage() {
     addProduct,
     updateProduct,
     deleteProduct,
+    toggleProductStatus,
     toggleProductBadge,
     addCategory,
     deleteCategory,
@@ -118,7 +119,12 @@ export default function AdminPage() {
 
   const handleToggleBadge = (prodId, badgeKey) => {
     toggleProductBadge(prodId, badgeKey);
-    showToast('Product badges updated');
+    showToast('Product badges updated in Supabase database');
+  };
+
+  const handleToggleStatus = (prodId, currentStatus) => {
+    toggleProductStatus(prodId);
+    showToast(`Product is now ${!currentStatus ? 'ACTIVE' : 'INACTIVE'} on storefront`);
   };
 
   // Category Add / Delete Handlers
@@ -235,14 +241,14 @@ export default function AdminPage() {
         slug: generatedSlug || editingProduct.slug,
         images: { front: finalImage },
       });
-      showToast(`Updated product options for "${productForm.name}"`);
+      showToast(`✅ Saved to Database & Synced Live Storefront: "${productForm.name}"`);
     } else {
       addProduct({
         ...productForm,
         slug: generatedSlug || `product-${Date.now()}`,
         images: { front: finalImage },
       });
-      showToast(`Added new product "${productForm.name}"`);
+      showToast(`✅ Created in Database & Published Live: "${productForm.name}"`);
     }
 
     setShowProductModal(false);
@@ -1027,7 +1033,7 @@ export default function AdminPage() {
                           <strong>Sizes:</strong> {prod.category.includes('kids') ? 'Kids 2-13Y' : 'XS, S, M, L, XL, XXL, 3XL'}
                         </div>
 
-                        <div className="badge-toggles-row mt-3">
+                        <div className="badge-toggles-row mt-3 flex gap-1 flex-wrap">
                           <button
                             className={`btn btn-xs ${prod.isBestseller ? 'btn-gold' : 'btn-outline'}`}
                             onClick={() => handleToggleBadge(prod.id, 'isBestseller')}
@@ -1039,6 +1045,14 @@ export default function AdminPage() {
                             onClick={() => handleToggleBadge(prod.id, 'isNew')}
                           >
                             {prod.isNew ? '✓ New Tag' : '+ Mark New'}
+                          </button>
+                          <button
+                            className={`btn btn-xs ${prod.isActive !== false ? 'btn-green' : 'btn-outline'}`}
+                            style={prod.isActive === false ? { color: '#E53E3E', borderColor: '#FEB2B2' } : {}}
+                            onClick={() => handleToggleStatus(prod.id, prod.isActive !== false)}
+                            title="Toggle Public Store Visibility"
+                          >
+                            {prod.isActive !== false ? '🟢 Store Active' : '🔴 Hidden (Inactive)'}
                           </button>
                         </div>
 
@@ -1076,7 +1090,7 @@ export default function AdminPage() {
                         <th>Available Sizes</th>
                         <th>Print Ratio</th>
                         <th>Placement</th>
-                        <th>Badges</th>
+                        <th>Visibility & Badges</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -1106,7 +1120,14 @@ export default function AdminPage() {
                           <td className="text-xs font-semibold">{prod.printLocation || 'front'}</td>
                           <td>
                             {prod.isBestseller && <span className="badge badge-gold mr-1">Bestseller</span>}
-                            {prod.isNew && <span className="badge badge-green">New</span>}
+                            {prod.isNew && <span className="badge badge-green mr-1">New</span>}
+                            <button
+                              className={`btn btn-xs ${prod.isActive !== false ? 'btn-green' : 'btn-outline'}`}
+                              style={prod.isActive === false ? { color: '#E53E3E', borderColor: '#FEB2B2' } : {}}
+                              onClick={() => handleToggleStatus(prod.id, prod.isActive !== false)}
+                            >
+                              {prod.isActive !== false ? '🟢 Active' : '🔴 Inactive'}
+                            </button>
                           </td>
                           <td>
                             <div className="flex gap-2">

@@ -10,8 +10,9 @@ import './ProductDetailPage.css';
 
 export default function ProductDetailPage() {
   const { products } = useProducts();
+  const activeProducts = products.filter(p => p.isActive !== false);
   const { slug } = useParams();
-  const product = products.find(p => p.slug === slug || p.id === slug) || products[0];
+  const product = activeProducts.find(p => p.slug === slug || p.id === slug) || activeProducts[0] || products[0];
   const { addItem } = useCart();
 
   const [selectedColour, setSelectedColour] = useState(product?.colours?.[0] || 'white');
@@ -47,7 +48,7 @@ export default function ProductDetailPage() {
     { id: 'lifestyle', label: 'Lifestyle View' },
   ];
 
-  const relatedProducts = products.filter(p => p.id !== product?.id).slice(0, 4);
+  const relatedProducts = activeProducts.filter(p => p.id !== product?.id).slice(0, 4);
   const currentSizes = sizeType === 'adult' ? SIZES : KIDS_SIZES;
   const currentChart = sizeChartMode === 'adult' ? SIZE_CHART : KIDS_SIZE_CHART;
 

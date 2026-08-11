@@ -14,7 +14,7 @@ export default function ShopPage() {
   const [gridCols, setGridCols] = useState(4); // 4 = 4-col 4:5 fashion ratio, 3 = 3-col 3:4 ratio, 2 = 2-col large ratio
 
   const filteredProducts = useMemo(() => {
-    let filtered = [...products];
+    let filtered = products.filter(p => p.isActive !== false);
     if (activeCategory !== 'all') {
       filtered = filtered.filter(p => Array.isArray(p.category) ? p.category.includes(activeCategory) : p.category === activeCategory);
     }

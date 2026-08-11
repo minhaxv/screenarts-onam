@@ -111,7 +111,7 @@ function CategorySection() {
 
         <div className="categories-grid">
           {categories.map((cat, i) => (
-            <RevealSection key={cat.id} delay={i * 0.1}>
+            <RevealSection key={cat.id || cat.slug || i} delay={i * 0.1}>
               <Link to={`/shop?cat=${cat.slug}`} className="category-card">
                 <div className="category-card__image">
                   <img
@@ -138,6 +138,7 @@ function CategorySection() {
 /* ═══ COLLECTION ═══ */
 function CollectionSection() {
   const { products } = useProducts();
+  const activeProducts = products.filter(p => p.isActive !== false);
   return (
     <section className="section">
       <div className="container">
@@ -150,7 +151,7 @@ function CollectionSection() {
         </RevealSection>
 
         <div className="grid grid-5 products-grid">
-          {products.slice(0, 10).map((product, i) => (
+          {activeProducts.slice(0, 10).map((product, i) => (
             <RevealSection key={product.id} delay={i * 0.05}>
               <ProductCard product={product} />
             </RevealSection>
@@ -160,7 +161,7 @@ function CollectionSection() {
         <RevealSection>
           <div className="text-center mt-8">
             <Link to="/shop" className="btn btn-outline btn-lg">
-              View All {products.length} Onam Designs <ArrowRight size={18} />
+              View All {activeProducts.length} Onam Designs <ArrowRight size={18} />
             </Link>
           </div>
         </RevealSection>

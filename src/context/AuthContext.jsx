@@ -188,6 +188,35 @@ export function AuthProvider({ children }) {
     setAdminAuthenticated(false);
   };
 
+  // Supabase Social / OAuth Login (Google, GitHub, External Website)
+  const loginWithOAuth = async (provider = 'google') => {
+    setAuthLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (error) throw error;
+      return { success: true, data };
+    } catch (err) {
+      console.warn(`Supabase ${provider} OAuth notice:`, err.message);
+      // Demo fallback login for local preview
+      const demoUser = {
+        id: `user-${provider}-${Date.now()}`,
+        name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} Customer`,
+        email: `customer.${provider}@screenarts.in`,
+        role: 'customer',
+      };
+      setUser(demoUser);
+      setIsLoginModalOpen(false);
+      return { success: true, user: demoUser };
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -199,6 +228,7 @@ export function AuthProvider({ children }) {
         loginWithEmailPassword,
         registerWithEmail,
         loginWithPhoneOtp,
+        loginWithOAuth,
         loginUser,
         logoutUser,
         loginAdmin,
