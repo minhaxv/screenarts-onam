@@ -2,10 +2,12 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ProductProvider } from './context/ProductContext';
 import { CartProvider } from './context/CartContext';
+import { AuthProvider } from './context/AuthContext';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
 import MobileBottomNav from './components/layout/MobileBottomNav';
 import CartDrawer from './components/cart/CartDrawer';
+import UserLoginModal from './components/auth/UserLoginModal';
 import HomePage from './pages/HomePage';
 import ShopPage from './pages/ShopPage';
 import ProductDetailPage from './pages/ProductDetailPage';
@@ -53,6 +55,7 @@ function AppContent() {
       {!isAdmin && <Footer />}
       {!isAdmin && <MobileBottomNav />}
       {!isAdmin && <CartDrawer />}
+      <UserLoginModal />
     </>
   );
 }
@@ -60,11 +63,13 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <ProductProvider>
-        <CartProvider>
-          <AppContent />
-        </CartProvider>
-      </ProductProvider>
+      <AuthProvider>
+        <ProductProvider>
+          <CartProvider>
+            <AppContent />
+          </CartProvider>
+        </ProductProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

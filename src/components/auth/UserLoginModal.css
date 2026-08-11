@@ -1,0 +1,26 @@
+.login-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 46, 0.65);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.login-modal-card {
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.login-modal-close {
+  color: var(--muted);
+  transition: color 0.2s;
+}
+
+.login-modal-close:hover {
+  color: var(--charcoal);
+}

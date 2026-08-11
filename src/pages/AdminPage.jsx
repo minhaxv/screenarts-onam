@@ -4,11 +4,12 @@ import {
   BarChart3, Package, Users, Palette, Settings, CheckCircle, Clock, Truck,
   Store, Search, Filter, ArrowUpRight, Download, Edit3, Phone, Mail, MapPin,
   Sparkles, Layers, ArrowLeft, RefreshCw, Eye, Plus, Trash2, X, AlertCircle,
-  TrendingUp, Printer, FileText, Check, Cpu, Radio, ChevronRight, Crop, Grid3x3, Grid2x2, LayoutList, FolderPlus, Tag, Image, Upload
+  TrendingUp, Printer, FileText, Check, Cpu, Radio, ChevronRight, Crop, Grid3x3, Grid2x2, LayoutList, FolderPlus, Tag, Image, Upload, Lock, LogOut
 } from 'lucide-react';
 import { INITIAL_ORDERS, INITIAL_BULK_QUOTES, INITIAL_CUSTOM_JOBS, STUDIO_STATS } from '../data/adminMockData';
 import { TSHIRT_COLOURS, SIZES, KIDS_SIZES, PRINT_LOCATIONS, PRINT_RATIOS, formatPrice } from '../data/products';
 import { useProducts } from '../context/ProductContext';
+import { useAuth } from '../context/AuthContext';
 import TShirtMockup from '../components/product/TShirtMockup';
 import './AdminPage.css';
 
@@ -29,11 +30,25 @@ export default function AdminPage() {
     resetToDefaults,
   } = useProducts();
 
+  const { adminAuthenticated, loginAdmin, logoutAdmin } = useAuth();
+  const [passcode, setPasscode] = useState('');
+  const [adminError, setAdminError] = useState('');
+
   const fileInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [orders, setOrders] = useState(INITIAL_ORDERS);
   const [bulkQuotes, setBulkQuotes] = useState(INITIAL_BULK_QUOTES);
   const [customJobs, setCustomJobs] = useState(INITIAL_CUSTOM_JOBS);
+
+  const handleAdminUnlock = (e) => {
+    e.preventDefault();
+    const result = loginAdmin(passcode);
+    if (!result.success) {
+      setAdminError(result.error);
+    } else {
+      setAdminError('');
+    }
+  };
 
   // Filters & Search State
   const [orderSearch, setOrderSearch] = useState('');
@@ -263,6 +278,45 @@ export default function AdminPage() {
     { day: 'Sun', count: 62, total: 34350 },
   ];
 
+  if (!adminAuthenticated) {
+    return (
+      <div className="admin-lock-screen min-h-screen bg-charcoal text-white flex items-center justify-center p-4">
+        <div className="card-white text-charcoal p-8 rounded-3xl max-w-md w-full shadow-2xl text-center border border-gold">
+          <div className="w-16 h-16 bg-gold text-charcoal rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold shadow-lg">
+            <Lock size={32} />
+          </div>
+          <span className="badge badge-gold">SCREENARTS CALICUT</span>
+          <h2 className="heading-2 mt-2">Studio Admin Access</h2>
+          <p className="text-xs text-muted mt-1">Enter your Studio Passcode to unlock the production & catalog control panel.</p>
+
+          <form onSubmit={handleAdminUnlock} className="mt-6 flex flex-col gap-4 text-left">
+            {adminError && <div className="p-3 bg-red-50 text-red border border-red-200 rounded-xl text-xs font-semibold">{adminError}</div>}
+            <div>
+              <label className="label">Studio Admin Passcode *</label>
+              <input
+                type="password"
+                className="input text-center text-xl font-bold tracking-widest"
+                required
+                placeholder="Enter Passcode (2026)"
+                value={passcode}
+                onChange={e => setPasscode(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <button type="submit" className="btn btn-primary btn-md w-full mt-2">
+              Unlock Studio Panel <ArrowUpRight size={18} />
+            </button>
+          </form>
+
+          <div className="mt-6 pt-4 border-t text-xs text-muted flex justify-between items-center">
+            <span>Default Passcode: <strong className="text-gold">2026</strong></span>
+            <Link to="/" className="text-green font-bold hover:underline">← Back to Storefront</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="admin-page page-enter">
       {/* Toast Notification */}
@@ -318,6 +372,10 @@ export default function AdminPage() {
             <Link to="/" className="btn btn-outline btn-sm">
               <Eye size={16} /> View Storefront
             </Link>
+
+            <button className="btn btn-outline btn-sm text-red" onClick={logoutAdmin} title="Lock Studio Panel">
+              <LogOut size={15} /> Lock Admin
+            </button>
 
             <div className="admin-user-pill">
               <span className="admin-user-dot"></span>

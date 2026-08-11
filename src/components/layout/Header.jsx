@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, User, ShoppingBag, Menu, X, ChevronRight } from 'lucide-react';
+import { Search, User, ShoppingBag, Menu, X, ChevronRight, LogIn } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useProducts } from '../../context/ProductContext';
+import { useAuth } from '../../context/AuthContext';
 import './Header.css';
 
 const NAV_LINKS = [
@@ -21,6 +22,7 @@ export default function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const { itemCount, setIsCartOpen, justAdded } = useCart();
   const { announcementText } = useProducts();
+  const { user, setIsLoginModalOpen } = useAuth();
   const location = useLocation();
 
   useEffect(() => {
@@ -41,33 +43,30 @@ export default function Header() {
 
   return (
     <>
-      {/* Announcement Bar */}
       <div className="announcement-bar">
         <div className="container">
-          <p>{announcementText}</p>
+          <p className="announcement-bar__text mb-0">
+            {announcementText}
+          </p>
         </div>
       </div>
 
-      {/* Header */}
-      <header className={`header ${isScrolled ? 'header--scrolled' : ''}`}>
+      <header className={`header ${isScrolled ? 'scrolled' : ''}`}>
         <div className="container header__inner">
-          {/* Mobile Menu Toggle */}
           <button
             className="header__menu-btn hide-desktop"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            onClick={() => setIsMenuOpen(true)}
             aria-label="Toggle menu"
           >
-            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            <Menu size={24} />
           </button>
 
-          {/* Logo */}
           <Link to="/" className="header__logo">
             <span className="header__logo-screen">SCREEN</span>
             <span className="header__logo-arts">ARTS</span>
-            <span className="header__logo-onam">ONAM</span>
+            <span className="header__logo-badge">ONAM '26</span>
           </Link>
 
-          {/* Desktop Nav */}
           <nav className="header__nav hide-mobile">
             {NAV_LINKS.map(link => (
               <Link
@@ -80,7 +79,6 @@ export default function Header() {
             ))}
           </nav>
 
-          {/* Actions */}
           <div className="header__actions">
             <button
               className="header__action-btn"
@@ -89,12 +87,19 @@ export default function Header() {
             >
               <Search size={20} />
             </button>
-            <Link to="/admin" className="header__action-btn hide-mobile" title="Studio Admin Panel">
-              <span className="badge badge-gold" style={{ fontSize: '10px', padding: '2px 8px' }}>ADMIN</span>
-            </Link>
-            <Link to="/checkout" className="header__action-btn hide-mobile" aria-label="Account">
-              <User size={20} />
-            </Link>
+            <button
+              className="header__action-btn"
+              onClick={() => setIsLoginModalOpen(true)}
+              title={user ? `Logged in as ${user.name}` : "Customer Login"}
+            >
+              {user ? (
+                <span className="badge badge-gold font-bold" style={{ fontSize: '11px' }}>
+                  {user.name.split(' ')[0]}
+                </span>
+              ) : (
+                <User size={20} />
+              )}
+            </button>
             <button
               className={`header__action-btn header__cart-btn ${justAdded ? 'bounce' : ''}`}
               onClick={() => setIsCartOpen(true)}

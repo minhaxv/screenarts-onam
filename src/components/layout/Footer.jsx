@@ -50,7 +50,6 @@ export default function Footer() {
             <Link to="/orders" className="footer__link">Track Order Status</Link>
             <Link to="/bulk-orders" className="footer__link">Bulk Orders</Link>
             <Link to="/contact" className="footer__link">Contact Us</Link>
-            <Link to="/admin" className="footer__link" style={{ color: 'var(--kasavu-gold-light)' }}>🖨️ Studio Admin</Link>
           </div>
 
           {/* Contact */}
