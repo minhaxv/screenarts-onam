@@ -1,5 +1,10 @@
 import { MongoClient } from 'mongodb';
 import { attachDatabasePool } from '@vercel/functions';
+import dns from 'dns';
+
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {}
 
 export default async function handler(req, res) {
   const uri = process.env.MONGODB_URI;
@@ -13,7 +18,7 @@ export default async function handler(req, res) {
 
   let client;
   try {
-    client = new MongoClient(uri);
+    client = new MongoClient(uri, { serverSelectionTimeoutMS: 8000 });
     try {
       attachDatabasePool(client);
     } catch (poolErr) {

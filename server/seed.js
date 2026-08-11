@@ -1,20 +1,36 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import dns from 'dns';
 import Product from './models/Product.js';
 import Category from './models/Category.js';
 import Order from './models/Order.js';
 import { products, CATEGORIES } from '../src/data/products.js';
 import { INITIAL_ORDERS } from '../src/data/adminMockData.js';
 
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {}
+
 dotenv.config();
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/screenarts';
 
+const mapStatus = (st) => {
+  switch (st) {
+    case 'Received': return 'Pending';
+    case 'Printing in Progress': return 'Production';
+    case 'Ready for Pickup': return 'Ready';
+    case 'Shipped': return 'Shipped';
+    case 'Delivered': return 'Completed';
+    default: return 'Pending';
+  }
+};
+
 const seedDatabase = async () => {
   try {
-    console.log(`⏳ Connecting to MongoDB at ${MONGODB_URI}...`);
+    console.log(`⏳ Connecting to MongoDB Atlas cluster...`);
     await mongoose.connect(MONGODB_URI);
-    console.log('✅ Connected to MongoDB!');
+    console.log('✅ Connected to MongoDB Atlas Cloud Database!');
 
     // Clear existing collections
     await Product.deleteMany({});
@@ -33,7 +49,7 @@ const seedDatabase = async () => {
     // Seed Orders
     const seededOrders = await Order.insertMany(
       INITIAL_ORDERS.map((o) => ({
-        orderId: o.id,
+        orderNumber: o.id,
         customerName: o.customerName,
         phone: o.phone,
         email: o.email,
@@ -43,8 +59,7 @@ const seedDatabase = async () => {
         items: o.items,
         totalAmount: o.totalAmount,
         paymentStatus: o.paymentStatus,
-        orderDate: o.orderDate,
-        status: o.status,
+        status: mapStatus(o.status),
         printSpecs: o.printSpecs,
       }))
     );

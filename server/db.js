@@ -2,6 +2,12 @@ import mongoose from 'mongoose';
 import { MongoClient } from 'mongodb';
 import { attachDatabasePool } from '@vercel/functions';
 import dotenv from 'dotenv';
+import dns from 'dns';
+
+// Ensure DNS SRV resolution succeeds on all local environments
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {}
 
 dotenv.config();
 
@@ -15,12 +21,11 @@ export const connectDB = async () => {
       return mongoose.connection;
     }
 
-    // Initialize MongoClient and attach Vercel Functions Database Pool
     const client = new MongoClient(MONGODB_URI);
     try {
       attachDatabasePool(client);
     } catch (poolErr) {
-      // Optional logging for non-Vercel environment
+      // Non-Vercel environment fallback
     }
 
     const conn = await mongoose.connect(MONGODB_URI, {
@@ -32,6 +37,5 @@ export const connectDB = async () => {
     return conn;
   } catch (error) {
     console.error(`❌ MongoDB Connection Error: ${error.message}`);
-    console.log('⚠️ Running with fallback state until MongoDB Atlas credentials are confirmed.');
   }
 };
