@@ -1,0 +1,11 @@
+.contact-page {
+  padding-bottom: var(--space-20);
+  background: var(--warm-ivory);
+  min-height: 100vh;
+}
+
+.contact-hero {
+  padding: var(--space-12) 0 var(--space-10);
+  background: linear-gradient(135deg, var(--cream) 0%, var(--soft-yellow-pale) 100%);
+  text-align: center;
+}

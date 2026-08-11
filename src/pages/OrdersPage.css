@@ -1,0 +1,77 @@
+.orders-page {
+  padding-bottom: var(--space-20);
+  background: var(--warm-ivory);
+  min-height: 100vh;
+}
+
+.orders-hero {
+  padding: var(--space-12) 0 var(--space-12);
+  background: linear-gradient(135deg, var(--cream) 0%, var(--soft-yellow-pale) 100%);
+  text-align: center;
+}
+
+.timeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  padding-left: 28px;
+}
+
+.timeline-steps::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 12px;
+  width: 2px;
+  background: #E2E8F0;
+}
+
+.timeline-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  position: relative;
+}
+
+.timeline-step__node {
+  position: absolute;
+  left: -28px;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #E2E8F0;
+  color: #718096;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  z-index: 2;
+}
+
+.timeline-step.done .timeline-step__node {
+  background: #1E5631;
+  color: #FFF;
+}
+
+.timeline-step.current .timeline-step__node {
+  background: #D4A843;
+  color: #1A1A2E;
+  box-shadow: 0 0 0 4px rgba(212, 168, 67, 0.2);
+}
+
+.timeline-step__content h5 {
+  color: #1A1A2E;
+}
+
+.timeline-step.done .timeline-step__content h5 {
+  color: #1E5631;
+}
+
+.timeline-step.current .timeline-step__content h5 {
+  color: #D4A843;
+  font-size: 15px;
+}

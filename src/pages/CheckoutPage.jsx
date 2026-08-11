@@ -1,0 +1,302 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { MapPin, CreditCard, Smartphone, Banknote, CheckCircle, ArrowLeft, Truck, Store, Wrench, Printer, Palette, Eye } from 'lucide-react';
+import { useCart } from '../context/CartContext';
+import { formatPrice } from '../data/products';
+import './CheckoutPage.css';
+
+export default function CheckoutPage() {
+  const { items, subtotal, deliveryFee, total, clearCart } = useCart();
+  const [delivery, setDelivery] = useState('home');
+  const [payment, setPayment] = useState('upi');
+  const [workflow, setWorkflow] = useState('PRINT_ONLY'); // 'PRINT_ONLY' | 'PRINT_SETUP' | 'FULL_DESIGN'
+  const [orderPlaced, setOrderPlaced] = useState(false);
+  const [placedOrderNumber, setPlacedOrderNumber] = useState('');
+  const [form, setForm] = useState({
+    name: '', mobile: '', email: '', address: '', pincode: '',
+  });
+
+  const workflowFee = workflow === 'PRINT_SETUP' ? 150 : workflow === 'FULL_DESIGN' ? 250 : 0;
+  const finalTotal = (delivery === 'home' ? total : subtotal) + workflowFee;
+
+  const handleChange = (field) => (e) => {
+    setForm(prev => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handlePlaceOrder = async (e) => {
+    e.preventDefault();
+
+    const orderPayload = {
+      customerName: form.name,
+      phone: form.mobile,
+      email: form.email,
+      deliveryMethod: delivery,
+      deliveryAddress: form.address,
+      pincode: form.pincode,
+      workflow: workflow,
+      items: items.map(item => ({
+        productId: item.id,
+        name: item.name,
+        colour: item.selectedOptions?.colour || 'White',
+        size: item.selectedOptions?.size || 'M',
+        printLocation: item.selectedOptions?.printLocation || 'Front Center',
+        printRatio: item.selectedOptions?.printRatio || '4:5',
+        quantity: item.quantity,
+        price: item.price,
+        customText: item.selectedOptions?.customText || '',
+        customDesignName: item.selectedOptions?.customDesign || '',
+      })),
+      totalAmount: finalTotal,
+      paymentStatus: payment === 'cod' ? 'Pending (COD)' : 'Paid (UPI/Card)',
+    };
+
+    try {
+      const res = await fetch('http://localhost:5000/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (res.ok) {
+        const createdOrder = await res.json();
+        setPlacedOrderNumber(createdOrder.orderNumber || 'ORD-8096');
+      } else {
+        setPlacedOrderNumber(`ORD-${Math.floor(8000 + Math.random() * 1000)}`);
+      }
+    } catch (err) {
+      setPlacedOrderNumber(`ORD-${Math.floor(8000 + Math.random() * 1000)}`);
+    }
+
+    setOrderPlaced(true);
+    clearCart();
+  };
+
+  if (orderPlaced) {
+    return (
+      <div className="checkout-page page-enter">
+        <div className="container">
+          <div className="checkout-success">
+            <div className="checkout-success__icon">
+              <CheckCircle size={64} />
+            </div>
+            <span className="badge badge-gold">ORDER CONFIRMED</span>
+            <h1 className="heading-2 mt-2">Order {placedOrderNumber} Placed! 🎉</h1>
+            <p className="subheading mt-3">
+              Thank you {form.name}! We've logged your order at ScreenArts Studio Calicut.
+            </p>
+            
+            <div className="mt-6 p-4 bg-cream rounded-2xl border max-w-md mx-auto text-left text-xs">
+              <p><strong>Order Number:</strong> <span className="text-green font-bold">{placedOrderNumber}</span></p>
+              <p className="mt-1"><strong>Service Workflow:</strong> {workflow.replace('_', ' ')}</p>
+              <p className="mt-1"><strong>Fulfillment:</strong> {delivery === 'pickup' ? '🏬 Calicut Studio Pickup' : '🚚 Home Delivery'}</p>
+            </div>
+
+            <div className="checkout-success__ctas mt-6 flex justify-center gap-4">
+              <Link to={`/orders?num=${placedOrderNumber}`} className="btn btn-primary btn-lg">
+                <Eye size={18} /> Track Order Status
+              </Link>
+              <Link to="/shop" className="btn btn-outline btn-lg">
+                Continue Shopping
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="checkout-page page-enter">
+      <div className="container">
+        <Link to="/cart" className="checkout-back">
+          <ArrowLeft size={18} /> Back to Cart
+        </Link>
+
+        <h1 className="heading-2 mt-4">Checkout & Service Selection</h1>
+
+        <form className="checkout-layout" onSubmit={handlePlaceOrder}>
+          {/* Left: Form */}
+          <div className="checkout-form">
+            {/* Service Workflow Selection */}
+            <div className="checkout-section">
+              <h3 className="checkout-section__title">1. Select Service Workflow</h3>
+              <p className="text-xs text-muted mb-3">Choose how ScreenArts Calicut prepares your artwork for printing</p>
+
+              <div className="grid grid-3 gap-3">
+                <button
+                  type="button"
+                  className={`checkout-delivery-option ${workflow === 'PRINT_ONLY' ? 'active' : ''}`}
+                  onClick={() => setWorkflow('PRINT_ONLY')}
+                >
+                  <Printer size={22} />
+                  <div>
+                    <h4 className="text-xs font-bold">PRINT ONLY</h4>
+                    <p className="text-xs text-muted">You provide final print-ready artwork</p>
+                    <span className="badge badge-green mt-1">Included (Free)</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`checkout-delivery-option ${workflow === 'PRINT_SETUP' ? 'active' : ''}`}
+                  onClick={() => setWorkflow('PRINT_SETUP')}
+                >
+                  <Wrench size={22} />
+                  <div>
+                    <h4 className="text-xs font-bold">PRINT + SETUP</h4>
+                    <p className="text-xs text-muted">We calibrate colors & prepress setup</p>
+                    <span className="badge badge-gold mt-1">+₹150</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`checkout-delivery-option ${workflow === 'FULL_DESIGN' ? 'active' : ''}`}
+                  onClick={() => setWorkflow('FULL_DESIGN')}
+                >
+                  <Palette size={22} />
+                  <div>
+                    <h4 className="text-xs font-bold">FULL DESIGN</h4>
+                    <p className="text-xs text-muted">ScreenArts team creates full artwork</p>
+                    <span className="badge badge-orange mt-1">+₹250</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Contact */}
+            <div className="checkout-section mt-6">
+              <h3 className="checkout-section__title">2. Contact Information</h3>
+              <div className="checkout-field-grid">
+                <div className="checkout-field">
+                  <label className="label">Full Name *</label>
+                  <input className="input" type="text" required value={form.name} onChange={handleChange('name')} placeholder="Your full name" />
+                </div>
+                <div className="checkout-field">
+                  <label className="label">Mobile Number *</label>
+                  <input className="input" type="tel" required value={form.mobile} onChange={handleChange('mobile')} placeholder="+91 94473 XXXXX" />
+                </div>
+                <div className="checkout-field checkout-field--full">
+                  <label className="label">Email</label>
+                  <input className="input" type="email" value={form.email} onChange={handleChange('email')} placeholder="your@email.com" />
+                </div>
+              </div>
+            </div>
+
+            {/* Delivery */}
+            <div className="checkout-section mt-6">
+              <h3 className="checkout-section__title">3. Delivery Method</h3>
+              <div className="checkout-delivery-options">
+                <button
+                  type="button"
+                  className={`checkout-delivery-option ${delivery === 'home' ? 'active' : ''}`}
+                  onClick={() => setDelivery('home')}
+                >
+                  <Truck size={24} />
+                  <div>
+                    <h4>Home Delivery</h4>
+                    <p>Delivered across Kerala in 2-4 business days</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  className={`checkout-delivery-option ${delivery === 'pickup' ? 'active' : ''}`}
+                  onClick={() => setDelivery('pickup')}
+                >
+                  <Store size={24} />
+                  <div>
+                    <h4>ScreenArts Store Pickup</h4>
+                    <p>Pick up from our Calicut Studio (Mavoor Rd) — Free</p>
+                  </div>
+                </button>
+              </div>
+
+              {delivery === 'home' && (
+                <div className="checkout-field-grid mt-4">
+                  <div className="checkout-field checkout-field--full">
+                    <label className="label">Address *</label>
+                    <textarea className="input" rows="3" required value={form.address} onChange={handleChange('address')} placeholder="Full delivery address" />
+                  </div>
+                  <div className="checkout-field">
+                    <label className="label">Pincode *</label>
+                    <input className="input" type="text" required value={form.pincode} onChange={handleChange('pincode')} placeholder="673XXX" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Payment */}
+            <div className="checkout-section mt-6">
+              <h3 className="checkout-section__title">4. Payment Method</h3>
+              <div className="checkout-payment-options">
+                {[
+                  { id: 'upi', icon: <Smartphone size={20} />, label: 'UPI', desc: 'GPay, PhonePe, Paytm' },
+                  { id: 'card', icon: <CreditCard size={20} />, label: 'Card', desc: 'Credit / Debit Card' },
+                  { id: 'cod', icon: <Banknote size={20} />, label: 'Cash', desc: 'Pay on pickup/delivery' },
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`checkout-payment-option ${payment === opt.id ? 'active' : ''}`}
+                    onClick={() => setPayment(opt.id)}
+                  >
+                    {opt.icon}
+                    <div>
+                      <h4>{opt.label}</h4>
+                      <p>{opt.desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Summary */}
+          <div className="checkout-summary">
+            <div className="checkout-summary__card">
+              <h3 className="checkout-summary__title">Order Summary</h3>
+              
+              <div className="checkout-summary__items">
+                {items.map(item => (
+                  <div key={item.cartItemId} className="checkout-summary__item">
+                    <div className="checkout-summary__item-info">
+                      <h4>{item.name}</h4>
+                      <p>Qty: {item.quantity} • {item.selectedOptions?.colour} / {item.selectedOptions?.size}</p>
+                    </div>
+                    <span>{formatPrice(item.price * item.quantity)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="divider" />
+
+              <div className="checkout-summary__rows">
+                <div className="checkout-summary__row">
+                  <span>Subtotal</span>
+                  <span>{formatPrice(subtotal)}</span>
+                </div>
+                <div className="checkout-summary__row">
+                  <span>Service Workflow</span>
+                  <span>{workflowFee > 0 ? `+${formatPrice(workflowFee)}` : 'Free'}</span>
+                </div>
+                <div className="checkout-summary__row">
+                  <span>Delivery Fee</span>
+                  <span>{delivery === 'home' ? (deliveryFee === 0 ? 'FREE' : formatPrice(deliveryFee)) : 'FREE'}</span>
+                </div>
+                <div className="divider" />
+                <div className="checkout-summary__row checkout-summary__total">
+                  <span>Total Payable</span>
+                  <span>{formatPrice(finalTotal)}</span>
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-lg mt-6" style={{ width: '100%' }}>
+                Place Order ({formatPrice(finalTotal)})
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

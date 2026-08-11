@@ -1,0 +1,97 @@
+.gallery-page { padding-bottom: var(--space-20); }
+
+.gallery-hero {
+  padding: var(--space-16) 0 var(--space-10);
+  background: linear-gradient(135deg, var(--cream), var(--kerala-green-pale));
+}
+
+.gallery-filters {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-6) 0;
+  justify-content: center;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-5);
+  padding-bottom: var(--space-12);
+}
+
+.gallery-card {
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  border: 2px solid var(--border-light);
+  transition: all var(--duration-normal) var(--ease-out);
+  cursor: pointer;
+}
+
+.gallery-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--kerala-green-light);
+}
+
+.gallery-card.selected {
+  border-color: var(--kerala-green);
+  box-shadow: var(--shadow-green);
+}
+
+.gallery-card__preview {
+  aspect-ratio: 1;
+  background: var(--cream);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gallery-card__emoji { font-size: 4rem; }
+
+.gallery-card__info {
+  padding: var(--space-4);
+}
+
+.gallery-card__name {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+
+.gallery-card__tags {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+
+.gallery-card__price {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
+
+.gallery-card__ctas {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.gallery-empty {
+  text-align: center;
+  padding: var(--space-16) 0;
+  color: var(--muted);
+}
+
+@media (max-width: 1024px) {
+  .gallery-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+  .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: var(--space-3); }
+  .gallery-card__emoji { font-size: 3rem; }
+  .gallery-page { padding-bottom: calc(var(--space-20) + var(--mobile-nav-height)); }
+}

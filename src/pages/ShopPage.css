@@ -1,0 +1,119 @@
+.shop-page { padding-bottom: var(--space-20); }
+
+.shop-hero {
+  padding: var(--space-12) 0 var(--space-8);
+  background: linear-gradient(135deg, var(--cream) 0%, var(--soft-yellow-pale) 100%);
+  text-align: center;
+}
+
+.shop-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6) 0;
+  flex-wrap: wrap;
+}
+
+.shop-categories {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.shop-controls-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Grid Aspect Ratio Switcher */
+.grid-ratio-switcher {
+  display: flex;
+  gap: 4px;
+  background: var(--cream);
+  padding: 3px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+}
+
+.ratio-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ratio-btn.active {
+  background: var(--white);
+  color: var(--kerala-green);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+.shop-sort {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+}
+
+.shop-sort__select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--charcoal);
+  background: var(--white);
+  cursor: pointer;
+}
+
+.shop-results-count {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.shop-grid {
+  gap: var(--space-6);
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.shop-empty {
+  text-align: center;
+  padding: var(--space-16) 0;
+  color: var(--muted);
+}
+
+@media (max-width: 1024px) {
+  .grid-4 { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .shop-hero { padding: var(--space-8) 0 var(--space-4); }
+  .grid-4, .grid-3, .grid-2 { grid-template-columns: repeat(2, 1fr) !important; gap: var(--space-3) !important; }
+  .shop-page { padding-bottom: calc(var(--space-20) + var(--mobile-nav-height)); }
+}
