@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/server": "^1.4.1",
     "@vercel/functions": "^3.9.2",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
