@@ -346,7 +346,7 @@ export default function AdminPage() {
   };
 
   // Save Product Form
-  const handleSaveProduct = (e) => {
+  const handleSaveProduct = async (e) => {
     e.preventDefault();
     if (!productForm.name.trim()) {
       alert('Please enter a product name.');
@@ -361,23 +361,27 @@ export default function AdminPage() {
       ? '/images/custom-flatlay.png'
       : productForm.uploadedImagePreview || productForm.imageUrl || '/images/custom-flatlay.png';
 
-    if (editingProduct) {
-      updateProduct(editingProduct.id, {
-        ...productForm,
-        slug: generatedSlug || editingProduct.slug,
-        images: { front: finalImage },
-      });
-      showToast(`✅ Saved to Database & Synced Live Storefront: "${productForm.name}"`);
-    } else {
-      addProduct({
-        ...productForm,
-        slug: generatedSlug || `product-${Date.now()}`,
-        images: { front: finalImage },
-      });
-      showToast(`✅ Created in Database & Published Live: "${productForm.name}"`);
+    try {
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, {
+          ...productForm,
+          slug: generatedSlug || editingProduct.slug,
+          images: { front: finalImage },
+        });
+        showToast(`✅ Saved to Database & Synced Live Storefront: "${productForm.name}"`);
+      } else {
+        await addProduct({
+          ...productForm,
+          slug: generatedSlug || `product-${Date.now()}`,
+          images: { front: finalImage },
+        });
+        showToast(`✅ Created in Database & Published Live: "${productForm.name}"`);
+      }
+      setShowProductModal(false);
+    } catch (err) {
+      console.error('Error saving product:', err);
+      alert(`Unable to save product to database: ${err.message || 'Database error'}`);
     }
-
-    setShowProductModal(false);
   };
 
   // Filtered Orders

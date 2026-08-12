@@ -44,9 +44,16 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
+    setErrorMsg('');
 
     if (!user) {
+      setErrorMsg('Please sign in or register to complete your order placement.');
       setIsLoginModalOpen(true);
+      return;
+    }
+
+    if (!form.name || !form.mobile || (delivery === 'home' && (!form.address || !form.pincode))) {
+      setErrorMsg('Please complete all required shipping & contact fields.');
       return;
     }
 
@@ -94,19 +101,21 @@ export default function CheckoutPage() {
       const orderPayload = {
         order_number: orderNum,
         user_id: user?.id || null,
-        customer_name: form.name,
-        phone: form.mobile,
-        email: form.email || user?.email || '',
+        customer_name: form.name.trim(),
+        phone: form.mobile.trim(),
+        email: form.email?.trim() || user?.email || '',
         items: validatedItems,
-        subtotal: validatedSubtotal,
-        delivery_charge: validatedDeliveryFee,
         total_amount: validatedTotal,
         delivery_method: delivery,
-        delivery_address: delivery === 'home' ? form.address : 'ScreenArts Calicut Studio Pickup',
-        pincode: delivery === 'home' ? form.pincode : '673001',
-        workflow: workflow,
+        delivery_address: delivery === 'home' ? form.address.trim() : 'ScreenArts Calicut Studio Pickup',
+        pincode: delivery === 'home' ? form.pincode.trim() : '673001',
         payment_status: 'Pending',
         order_status: 'Pending',
+        print_specs: {
+          subtotal: validatedSubtotal,
+          deliveryFee: validatedDeliveryFee,
+          workflow: workflow,
+        },
         created_at: new Date().toISOString(),
       };
 

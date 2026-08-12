@@ -249,64 +249,62 @@ export function ProductProvider({ children }) {
       isActive: newProdData.isActive !== undefined ? newProdData.isActive : true,
     };
 
-    setProducts((prev) => [formattedProduct, ...prev.filter(p => p.id !== id && p.slug !== slug)]);
+    const dbPayload = mapProductToSupabase(formattedProduct);
+    const { data: insertedData, error } = await supabase
+      .from('products')
+      .insert([dbPayload])
+      .select()
+      .single();
 
-    try {
-      const dbPayload = mapProductToSupabase(formattedProduct);
-      const { error } = await supabase.from('products').upsert([dbPayload]);
-      if (error) {
-        console.warn('Notice saving product to Supabase:', error.message);
-      }
-    } catch (err) {
-      console.warn('Supabase INSERT notice:', err.message);
+    if (error) {
+      console.error('Supabase Product INSERT Error:', error.message);
+      throw new Error(error.message || 'Failed to save product in database.');
     }
 
-    return formattedProduct;
+    const savedProduct = mapSupabaseToProduct(insertedData || dbPayload);
+    setProducts((prev) => [savedProduct, ...prev.filter(p => p.id !== id && p.slug !== slug)]);
+    await fetchFromDatabase();
+    return savedProduct;
   };
 
   // Real Database UPDATE in Supabase
   const updateProduct = async (id, updatedFields) => {
-    let updatedProduct;
+    const existing = products.find(p => p.id === id || p._id === id || p.slug === id) || {};
+    const merged = { ...existing, ...updatedFields, id: existing.id || id };
+    const dbPayload = mapProductToSupabase(merged);
 
-    setProducts((prev) =>
-      prev.map((prod) => {
-        if (prod.id === id || prod._id === id || prod.slug === id) {
-          updatedProduct = { ...prod, ...updatedFields };
-          return updatedProduct;
-        }
-        return prod;
-      })
-    );
+    const { data: updatedData, error } = await supabase
+      .from('products')
+      .upsert([dbPayload])
+      .select()
+      .single();
 
-    try {
-      const existing = products.find(p => p.id === id || p._id === id || p.slug === id) || {};
-      const merged = { ...existing, ...updatedFields, id: existing.id || id };
-      const dbPayload = mapProductToSupabase(merged);
-
-      const { error } = await supabase
-        .from('products')
-        .upsert([dbPayload]);
-
-      if (error) {
-        console.warn('Notice updating product in Supabase:', error.message);
-      }
-    } catch (err) {
-      console.warn('Supabase UPDATE notice:', err.message);
+    if (error) {
+      console.error('Supabase Product UPDATE Error:', error.message);
+      throw new Error(error.message || 'Failed to update product in database.');
     }
+
+    const savedProduct = mapSupabaseToProduct(updatedData || dbPayload);
+    setProducts((prev) =>
+      prev.map((prod) => (prod.id === id || prod._id === id || prod.slug === id ? savedProduct : prod))
+    );
+    await fetchFromDatabase();
+    return savedProduct;
   };
 
   // Real Database DELETE in Supabase
   const deleteProduct = async (id) => {
-    setProducts((prev) => prev.filter((prod) => prod.id !== id && prod._id !== id && prod.slug !== id));
+    const targetProduct = products.find(p => p.id === id || p._id === id || p.slug === id);
+    const dbId = targetProduct?._id || targetProduct?.id || id;
 
-    try {
-      await supabase
-        .from('products')
-        .delete()
-        .or(`id.eq.${id},slug.eq.${id}`);
-    } catch (err) {
-      console.warn('Supabase DELETE notice:', err.message);
+    const { error } = await supabase.from('products').delete().eq('id', dbId);
+    if (error) {
+      console.error('Supabase Product DELETE Error:', error.message);
+      throw new Error(error.message || 'Failed to delete product from database.');
     }
+
+    setProducts((prev) => prev.filter((prod) => prod.id !== id && prod._id !== id && prod.slug !== id));
+    await fetchFromDatabase();
   };
 
   // Toggle Active/Inactive Status in Supabase
