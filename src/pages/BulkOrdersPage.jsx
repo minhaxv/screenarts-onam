@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, GraduationCap, Building2, School, Heart, Calendar, Package, ArrowRight, CheckCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { BULK_PRICING, TSHIRT_COLOURS, formatPrice } from '../data/products';
 import './BulkOrdersPage.css';
 
@@ -21,8 +22,23 @@ export default function BulkOrdersPage() {
   const currentTier = BULK_PRICING.find(t => quantity >= t.min && quantity <= t.max) || BULK_PRICING[BULK_PRICING.length - 1];
   const estimatedTotal = currentTier.price * quantity;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    try {
+      await supabase.from('bulk_enquiries').insert([
+        {
+          name: form.name,
+          phone: form.phone,
+          organisation: form.group,
+          group_type: form.group,
+          quantity: Number(form.qty || quantity || 10),
+          description: form.notes,
+          status: 'Pending',
+        }
+      ]);
+    } catch (err) {
+      console.warn('Notice submitting bulk quote to Supabase:', err.message);
+    }
     setSubmitted(true);
   };
 

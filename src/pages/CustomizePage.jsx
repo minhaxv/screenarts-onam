@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Upload, Type, Palette as PaletteIcon, Image, ChevronRight, X, Plus, Minus, ArrowRight, PenTool, Crop } from 'lucide-react';
 import { TSHIRT_COLOURS, SIZES, KIDS_SIZES, PRINT_LOCATIONS, PRINT_RATIOS, designs, formatPrice } from '../data/products';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import TShirtMockup from '../components/product/TShirtMockup';
 import './CustomizePage.css';
 
@@ -13,6 +15,7 @@ export default function CustomizePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { addItem } = useCart();
+  const { user } = useAuth();
   const fileInputRef = useRef(null);
 
   const [tshirtColour, setTshirtColour] = useState('white');
@@ -48,12 +51,31 @@ export default function CustomizePage() {
   const designFee = isRequestDesign ? 250 : 0;
   const totalPrice = (TSHIRT_BASE_PRICE + PRINT_PRICE + designFee) * quantity;
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      const localPreview = URL.createObjectURL(file);
       setUploadedFile({ name: file.name, size: (file.size / 1024).toFixed(1) + ' KB' });
-      setUploadedPreview(URL.createObjectURL(file));
+      setUploadedPreview(localPreview);
       setSelectedDesign(null);
+
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `artwork-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const { data, error } = await supabase.storage
+          .from('custom-designs')
+          .upload(fileName, file, { cacheControl: '3600', upsert: true });
+
+        if (!error) {
+          const { data: publicData } = supabase.storage.from('custom-designs').getPublicUrl(fileName);
+          if (publicData?.publicUrl) {
+            setUploadedPreview(publicData.publicUrl);
+            setUploadedFile(prev => ({ ...prev, publicUrl: publicData.publicUrl }));
+          }
+        }
+      } catch (err) {
+        console.warn('Artwork upload notice:', err.message);
+      }
     }
   };
 
@@ -61,19 +83,42 @@ export default function CustomizePage() {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (file) {
+      const localPreview = URL.createObjectURL(file);
       setUploadedFile({ name: file.name, size: (file.size / 1024).toFixed(1) + ' KB' });
-      setUploadedPreview(URL.createObjectURL(file));
+      setUploadedPreview(localPreview);
       setSelectedDesign(null);
     }
   };
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
+    const artworkUrl = uploadedFile?.publicUrl || uploadedPreview || '';
+
+    // Save record to Supabase custom_designs table
+    if (uploadedFile || isRequestDesign || selectedDesign) {
+      try {
+        await supabase.from('custom_designs').insert([
+          {
+            user_id: user?.id || null,
+            customer_name: user?.name || 'Customer',
+            phone: user?.phone || '',
+            email: user?.email || '',
+            file_url: artworkUrl || selectedDesign?.name || 'Custom Artwork',
+            file_name: uploadedFile?.name || selectedDesign?.name || 'Custom Design',
+            shirt_colour: colourData?.name || tshirtColour,
+            print_location: printLocation,
+            quantity: quantity,
+            status: 'Pending',
+          }
+        ]);
+      } catch (err) {}
+    }
+
     addItem(
       {
         id: `custom-${Date.now()}`,
         name: selectedDesign ? `Custom: ${selectedDesign.name}` : customText ? `Custom Text: "${customText}"` : uploadedFile ? `Upload: ${uploadedFile.name}` : 'Custom Onam T-Shirt',
         price: TSHIRT_BASE_PRICE + PRINT_PRICE + designFee,
-        images: {},
+        images: { front: artworkUrl || '/images/custom-flatlay.png' },
       },
       {
         colour: tshirtColour,
@@ -84,6 +129,7 @@ export default function CustomizePage() {
         printRatio: ratioData?.name,
         printType: isRequestDesign ? 'Request Design' : 'Custom Print',
         customDesign: uploadedFile?.name || selectedDesign?.name,
+        customDesignUrl: artworkUrl,
         customText,
       }
     );

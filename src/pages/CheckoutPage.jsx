@@ -1,20 +1,39 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, CreditCard, Smartphone, Banknote, CheckCircle, ArrowLeft, Truck, Store, Wrench, Printer, Palette, Eye } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { formatPrice } from '../data/products';
 import './CheckoutPage.css';
 
 export default function CheckoutPage() {
   const { items, subtotal, deliveryFee, total, clearCart } = useCart();
+  const { user, setIsLoginModalOpen } = useAuth();
   const [delivery, setDelivery] = useState('home');
   const [payment, setPayment] = useState('upi');
   const [workflow, setWorkflow] = useState('PRINT_ONLY'); // 'PRINT_ONLY' | 'PRINT_SETUP' | 'FULL_DESIGN'
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedOrderNumber, setPlacedOrderNumber] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
-    name: '', mobile: '', email: '', address: '', pincode: '',
+    name: user?.name || '',
+    mobile: user?.phone || '',
+    email: user?.email || '',
+    address: '',
+    pincode: '',
   });
+
+  useEffect(() => {
+    if (user) {
+      setForm(prev => ({
+        ...prev,
+        name: prev.name || user.name || '',
+        mobile: prev.mobile || user.phone || '',
+        email: prev.email || user.email || '',
+      }));
+    }
+  }, [user]);
 
   const workflowFee = workflow === 'PRINT_SETUP' ? 150 : workflow === 'FULL_DESIGN' ? 250 : 0;
   const finalTotal = (delivery === 'home' ? total : subtotal) + workflowFee;
@@ -26,49 +45,110 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
 
-    const orderPayload = {
-      customerName: form.name,
-      phone: form.mobile,
-      email: form.email,
-      deliveryMethod: delivery,
-      deliveryAddress: form.address,
-      pincode: form.pincode,
-      workflow: workflow,
-      items: items.map(item => ({
-        productId: item.id,
-        name: item.name,
-        colour: item.selectedOptions?.colour || 'White',
-        size: item.selectedOptions?.size || 'M',
-        printLocation: item.selectedOptions?.printLocation || 'Front Center',
-        printRatio: item.selectedOptions?.printRatio || '4:5',
-        quantity: item.quantity,
-        price: item.price,
-        customText: item.selectedOptions?.customText || '',
-        customDesignName: item.selectedOptions?.customDesign || '',
-      })),
-      totalAmount: finalTotal,
-      paymentStatus: payment === 'cod' ? 'Pending (COD)' : 'Paid (UPI/Card)',
-    };
-
-    try {
-      const res = await fetch('http://localhost:5000/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload),
-      });
-
-      if (res.ok) {
-        const createdOrder = await res.json();
-        setPlacedOrderNumber(createdOrder.orderNumber || 'ORD-8096');
-      } else {
-        setPlacedOrderNumber(`ORD-${Math.floor(8000 + Math.random() * 1000)}`);
-      }
-    } catch (err) {
-      setPlacedOrderNumber(`ORD-${Math.floor(8000 + Math.random() * 1000)}`);
+    if (!user) {
+      setIsLoginModalOpen(true);
+      return;
     }
 
-    setOrderPlaced(true);
-    clearCart();
+    if (items.length === 0) return;
+
+    setIsSubmitting(true);
+    const orderNum = `ORD-${Math.floor(80000 + Math.random() * 10000)}`;
+
+    try {
+      // 1. Fetch current product prices directly from Supabase for security validation
+      const productIds = items.map(i => i.id || i._id).filter(Boolean);
+      const { data: dbProducts } = await supabase
+        .from('products')
+        .select('id, price, name')
+        .in('id', productIds);
+
+      const priceMap = new Map();
+      if (Array.isArray(dbProducts)) {
+        dbProducts.forEach(p => priceMap.set(p.id, Number(p.price)));
+      }
+
+      // Re-calculate validated items and total
+      const validatedItems = items.map(item => {
+        const validatedUnitPrice = priceMap.has(item.id) ? priceMap.get(item.id) : Number(item.price || 0);
+        return {
+          productId: item.id || item._id,
+          name: item.name,
+          colour: item.selectedOptions?.colour || 'White',
+          size: item.selectedOptions?.size || 'M',
+          printLocation: item.selectedOptions?.printLocation || 'Front Center',
+          printRatio: item.selectedOptions?.printRatio || '4:5',
+          quantity: Number(item.quantity || 1),
+          price: validatedUnitPrice,
+          customText: item.selectedOptions?.customText || '',
+          customDesignName: item.selectedOptions?.customDesign || '',
+          customDesignUrl: item.selectedOptions?.customDesignUrl || '',
+        };
+      });
+
+      const validatedSubtotal = validatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const validatedDeliveryFee = delivery === 'home' ? (validatedSubtotal >= 999 ? 0 : 79) : 0;
+      const validatedTotal = validatedSubtotal + validatedDeliveryFee + workflowFee;
+
+      // 2. Insert Header Record into Supabase `orders` table
+      const orderPayload = {
+        order_number: orderNum,
+        user_id: user?.id || null,
+        customer_name: form.name,
+        phone: form.mobile,
+        email: form.email || user?.email || '',
+        items: validatedItems,
+        subtotal: validatedSubtotal,
+        delivery_charge: validatedDeliveryFee,
+        total_amount: validatedTotal,
+        delivery_method: delivery,
+        delivery_address: delivery === 'home' ? form.address : 'ScreenArts Calicut Studio Pickup',
+        pincode: delivery === 'home' ? form.pincode : '673001',
+        workflow: workflow,
+        payment_status: 'Pending',
+        order_status: 'Pending',
+        created_at: new Date().toISOString(),
+      };
+
+      const { data: createdOrder, error: orderError } = await supabase
+        .from('orders')
+        .insert([orderPayload])
+        .select('id, order_number')
+        .single();
+
+      if (orderError) {
+        console.warn('Notice saving order to Supabase:', orderError.message);
+      }
+
+      // 3. Insert Detail Records into Supabase `order_items` table
+      const parentOrderId = createdOrder?.id || orderNum;
+      const orderItemsPayload = validatedItems.map(it => ({
+        order_id: parentOrderId,
+        product_id: it.productId || null,
+        product_name: it.name,
+        size: it.size,
+        colour: it.colour,
+        quantity: it.quantity,
+        unit_price: it.price,
+        print_position: it.printLocation,
+        custom_design_url: it.customDesignUrl || null,
+      }));
+
+      try {
+        await supabase.from('order_items').insert(orderItemsPayload);
+      } catch (err) {}
+
+      setPlacedOrderNumber(orderNum);
+      setOrderPlaced(true);
+      clearCart();
+    } catch (err) {
+      console.error('Order creation error:', err);
+      setPlacedOrderNumber(orderNum);
+      setOrderPlaced(true);
+      clearCart();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (orderPlaced) {

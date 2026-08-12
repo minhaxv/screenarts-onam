@@ -4,8 +4,6 @@ import { supabase } from '../lib/supabase';
 
 const ProductContext = createContext();
 
-const API_BASE = 'http://localhost:5000/api';
-
 export function mapSupabaseToProduct(p) {
   return {
     id: p.id || p.slug,
@@ -105,13 +103,40 @@ export function ProductProvider({ children }) {
 
   const [isLoadingDB, setIsLoadingDB] = useState(false);
 
+  // Upload image to Supabase Storage bucket 'product-images'
+  const uploadProductImage = async (file) => {
+    if (!file) return null;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `product-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const { data, error } = await supabase.storage
+        .from('product-images')
+        .upload(fileName, file, { cacheControl: '3600', upsert: true });
+
+      if (error) {
+        console.warn('Notice uploading to product-images storage:', error.message);
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const { data: publicData } = supabase.storage.from('product-images').getPublicUrl(fileName);
+      return publicData?.publicUrl || null;
+    } catch (err) {
+      console.warn('Storage upload error:', err.message);
+      return null;
+    }
+  };
+
   // Seed Supabase with initial product dataset if empty or uninitialized
   const seedSupabaseIfNeeded = async () => {
     try {
       const recordsToSeed = initialProducts.map(mapProductToSupabase);
       const { error } = await supabase.from('products').upsert(recordsToSeed);
       if (!error) {
-        console.log('✅ Initialized and seeded Supabase products table successfully.');
+        console.log('Initialized and seeded Supabase products table successfully.');
       }
     } catch (err) {
       console.warn('Supabase auto-seed notice:', err.message);
@@ -133,26 +158,25 @@ export function ProductProvider({ children }) {
         setProducts(formatted);
         localStorage.setItem('screenarts_products', JSON.stringify(formatted));
       } else if (error && (error.code === 'PGRST205' || error.code === '42P01')) {
-        // Table doesn't exist yet, seed initial data
         await seedSupabaseIfNeeded();
       } else if (!data || data.length === 0) {
-        // Table is empty, seed initial data
         await seedSupabaseIfNeeded();
       }
 
-      // 2. Fetch Categories from API / Supabase
+      // 2. Fetch Categories from Supabase
       try {
-        const catRes = await fetch(`${API_BASE}/categories`);
-        if (catRes.ok) {
-          const catData = await catRes.json();
-          if (Array.isArray(catData) && catData.length > 0) {
-            setCategories(catData);
-            localStorage.setItem('screenarts_categories', JSON.stringify(catData));
-          }
+        const { data: catData, error: catErr } = await supabase
+          .from('categories')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (!catErr && Array.isArray(catData) && catData.length > 0) {
+          setCategories(catData);
+          localStorage.setItem('screenarts_categories', JSON.stringify(catData));
         }
       } catch (catErr) {}
     } catch (err) {
-      console.error('Supabase fetch error, maintaining synchronized state cache:', err.message);
+      console.error('Supabase fetch error:', err.message);
     } finally {
       setIsLoadingDB(false);
     }
@@ -200,7 +224,7 @@ export function ProductProvider({ children }) {
     localStorage.setItem('screenarts_pickup', JSON.stringify(studioPickupOpen));
   }, [studioPickupOpen]);
 
-  // Listen for cross-tab storage updates (Instant Multi-Window Sync)
+  // Listen for cross-tab storage updates
   useEffect(() => {
     const handleStorageChange = (e) => {
       try {
@@ -240,29 +264,17 @@ export function ProductProvider({ children }) {
       isActive: newProdData.isActive !== undefined ? newProdData.isActive : true,
     };
 
-    // 1. Instant UI State Update
     setProducts((prev) => [formattedProduct, ...prev.filter(p => p.id !== id && p.slug !== slug)]);
 
-    // 2. Perform Real Database INSERT in Supabase
     try {
       const dbPayload = mapProductToSupabase(formattedProduct);
-      const { error } = await supabase.from('products').insert([dbPayload]);
-      if (error && (error.code === 'PGRST205' || error.code === '42P01')) {
-        // Table not present yet, attempt upsert/seed
-        await supabase.from('products').upsert([dbPayload]);
+      const { error } = await supabase.from('products').upsert([dbPayload]);
+      if (error) {
+        console.warn('Notice saving product to Supabase:', error.message);
       }
     } catch (err) {
-      console.warn('Supabase INSERT background sync:', err.message);
+      console.warn('Supabase INSERT notice:', err.message);
     }
-
-    // 3. Optional Express API Sync fallback
-    try {
-      await fetch(`${API_BASE}/products`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formattedProduct),
-      });
-    } catch (err) {}
 
     return formattedProduct;
   };
@@ -271,7 +283,6 @@ export function ProductProvider({ children }) {
   const updateProduct = async (id, updatedFields) => {
     let updatedProduct;
 
-    // 1. Instant UI State Update
     setProducts((prev) =>
       prev.map((prod) => {
         if (prod.id === id || prod._id === id || prod.slug === id) {
@@ -282,7 +293,6 @@ export function ProductProvider({ children }) {
       })
     );
 
-    // 2. Perform Real Database UPDATE in Supabase
     try {
       const existing = products.find(p => p.id === id || p._id === id || p.slug === id) || {};
       const merged = { ...existing, ...updatedFields, id: existing.id || id };
@@ -290,48 +300,28 @@ export function ProductProvider({ children }) {
 
       const { error } = await supabase
         .from('products')
-        .update(dbPayload)
-        .or(`id.eq.${id},slug.eq.${id}`);
+        .upsert([dbPayload]);
 
       if (error) {
-        // If update failed (e.g. non-matching primary key or PGRST205), try upsert
-        await supabase.from('products').upsert([dbPayload]);
+        console.warn('Notice updating product in Supabase:', error.message);
       }
     } catch (err) {
-      console.warn('Supabase UPDATE background sync:', err.message);
+      console.warn('Supabase UPDATE notice:', err.message);
     }
-
-    // 3. Optional Express API Sync fallback
-    try {
-      await fetch(`${API_BASE}/products/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedFields),
-      });
-    } catch (err) {}
   };
 
   // Real Database DELETE in Supabase
   const deleteProduct = async (id) => {
-    // 1. Instant UI State Update
     setProducts((prev) => prev.filter((prod) => prod.id !== id && prod._id !== id && prod.slug !== id));
 
-    // 2. Perform Real Database DELETE in Supabase
     try {
       await supabase
         .from('products')
         .delete()
         .or(`id.eq.${id},slug.eq.${id}`);
     } catch (err) {
-      console.warn('Supabase DELETE background sync:', err.message);
+      console.warn('Supabase DELETE notice:', err.message);
     }
-
-    // 3. Optional Express API Sync fallback
-    try {
-      await fetch(`${API_BASE}/products/${id}`, {
-        method: 'DELETE',
-      });
-    } catch (err) {}
   };
 
   // Toggle Active/Inactive Status in Supabase
@@ -345,7 +335,7 @@ export function ProductProvider({ children }) {
     return true;
   };
 
-  // Toggle Badge
+  // Toggle Badge in Supabase
   const toggleProductBadge = (id, badgeKey) => {
     const target = products.find(p => p.id === id || p._id === id || p.slug === id);
     if (target) {
@@ -363,11 +353,7 @@ export function ProductProvider({ children }) {
     setCategories((prev) => [...prev, newCat]);
 
     try {
-      await fetch(`${API_BASE}/categories`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCat),
-      });
+      await supabase.from('categories').upsert([newCat]);
     } catch (err) {}
 
     return newCat;
@@ -377,9 +363,7 @@ export function ProductProvider({ children }) {
     setCategories((prev) => prev.filter((cat) => cat.id !== id && cat.slug !== id));
 
     try {
-      await fetch(`${API_BASE}/categories/${id}`, {
-        method: 'DELETE',
-      });
+      await supabase.from('categories').delete().or(`id.eq.${id},slug.eq.${id}`);
     } catch (err) {}
   };
 
@@ -415,6 +399,7 @@ export function ProductProvider({ children }) {
         setAnnouncementText,
         setStudioPickupOpen,
         fetchFromDatabase,
+        uploadProductImage,
         addProduct,
         updateProduct,
         deleteProduct,
@@ -437,4 +422,3 @@ export function useProducts() {
   }
   return context;
 }
-

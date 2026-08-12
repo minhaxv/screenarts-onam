@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BarChart3, Package, Users, Palette, Settings, CheckCircle, Clock, Truck,
@@ -10,6 +10,7 @@ import { INITIAL_ORDERS, INITIAL_BULK_QUOTES, INITIAL_CUSTOM_JOBS, STUDIO_STATS 
 import { TSHIRT_COLOURS, SIZES, KIDS_SIZES, PRINT_LOCATIONS, PRINT_RATIOS, formatPrice } from '../data/products';
 import { useProducts } from '../context/ProductContext';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import TShirtMockup from '../components/product/TShirtMockup';
 import './AdminPage.css';
 
@@ -21,6 +22,7 @@ export default function AdminPage() {
     studioPickupOpen,
     setAnnouncementText,
     setStudioPickupOpen,
+    uploadProductImage,
     addProduct,
     updateProduct,
     deleteProduct,
@@ -41,6 +43,89 @@ export default function AdminPage() {
   const [bulkQuotes, setBulkQuotes] = useState(INITIAL_BULK_QUOTES);
   const [customJobs, setCustomJobs] = useState(INITIAL_CUSTOM_JOBS);
 
+  // Fetch live Admin Data from Supabase
+  const fetchAdminDataFromSupabase = useCallback(async () => {
+    try {
+      // 1. Fetch Orders
+      const { data: dbOrders } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (Array.isArray(dbOrders) && dbOrders.length > 0) {
+        const mappedOrders = dbOrders.map(ord => ({
+          id: ord.order_number || ord.id,
+          dbId: ord.id,
+          customerName: ord.customer_name,
+          phone: ord.phone,
+          email: ord.email || '',
+          deliveryMethod: ord.delivery_method || 'home',
+          deliveryAddress: ord.delivery_address || '',
+          pincode: ord.pincode || '',
+          items: Array.isArray(ord.items) ? ord.items : [],
+          totalAmount: Number(ord.total_amount || 0),
+          paymentStatus: ord.payment_status || 'Pending',
+          orderDate: ord.created_at ? new Date(ord.created_at).toLocaleString() : 'Recent',
+          status: ord.order_status || 'Pending',
+          workflow: ord.workflow || 'PRINT_ONLY',
+        }));
+        setOrders(mappedOrders);
+      }
+
+      // 2. Fetch Custom Designs
+      const { data: dbDesigns } = await supabase
+        .from('custom_designs')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (Array.isArray(dbDesigns) && dbDesigns.length > 0) {
+        const mappedJobs = dbDesigns.map(j => ({
+          id: j.id,
+          customer: j.customer_name || 'Customer',
+          phone: j.phone || '',
+          type: 'User Artwork Upload',
+          fileName: j.file_name || 'artwork.png',
+          fileUrl: j.file_url,
+          shirtColour: j.shirt_colour || 'White',
+          printLocation: j.print_location || 'Front Center',
+          qty: j.quantity || 1,
+          status: j.status || 'Pending',
+          date: j.created_at ? new Date(j.created_at).toLocaleString() : 'Recent',
+        }));
+        setCustomJobs(mappedJobs);
+      }
+
+      // 3. Fetch Bulk Quotes
+      const { data: dbQuotes } = await supabase
+        .from('bulk_enquiries')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (Array.isArray(dbQuotes) && dbQuotes.length > 0) {
+        const mappedQuotes = dbQuotes.map(q => ({
+          id: q.id,
+          organization: q.organisation || q.name || 'Group Request',
+          contactPerson: q.name,
+          phone: q.phone,
+          groupType: q.group_type || 'Group',
+          quantity: q.quantity || 10,
+          estimatedRatePerPc: 269,
+          estimatedTotal: (q.quantity || 10) * 269,
+          notes: q.description || '',
+          requestDate: q.created_at ? new Date(q.created_at).toLocaleString() : 'Recent',
+          status: q.status || 'Pending',
+        }));
+        setBulkQuotes(mappedQuotes);
+      }
+    } catch (err) {
+      console.warn('Notice fetching admin data from Supabase:', err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAdminDataFromSupabase();
+  }, [fetchAdminDataFromSupabase]);
+
   const handleAdminUnlock = (e) => {
     e.preventDefault();
     const result = loginAdmin(passcode);
@@ -48,6 +133,7 @@ export default function AdminPage() {
       setAdminError(result.error);
     } else {
       setAdminError('');
+      fetchAdminDataFromSupabase();
     }
   };
 
@@ -96,24 +182,36 @@ export default function AdminPage() {
   };
 
   // Status handlers
-  const handleOrderStatusChange = (orderId, newStatus) => {
+  const handleOrderStatusChange = async (orderId, newStatus) => {
     setOrders(prev =>
-      prev.map(ord => (ord.id === orderId ? { ...ord, status: newStatus } : ord))
+      prev.map(ord => (ord.id === orderId || ord.dbId === orderId ? { ...ord, status: newStatus } : ord))
     );
-    showToast(`Order ${orderId} updated to "${newStatus}"`);
+    try {
+      await supabase
+        .from('orders')
+        .update({ order_status: newStatus })
+        .or(`order_number.eq.${orderId},id.eq.${orderId}`);
+    } catch (err) {}
+    showToast(`Order ${orderId} updated to "${newStatus}" in Supabase`);
   };
 
-  const handleQuoteStatusChange = (quoteId, newStatus) => {
+  const handleQuoteStatusChange = async (quoteId, newStatus) => {
     setBulkQuotes(prev =>
       prev.map(q => (q.id === quoteId ? { ...q, status: newStatus } : q))
     );
+    try {
+      await supabase.from('bulk_enquiries').update({ status: newStatus }).eq('id', quoteId);
+    } catch (err) {}
     showToast(`Quote ${quoteId} status updated to "${newStatus}"`);
   };
 
-  const handleCustomJobStatusChange = (jobId, newStatus) => {
+  const handleCustomJobStatusChange = async (jobId, newStatus) => {
     setCustomJobs(prev =>
       prev.map(j => (j.id === jobId ? { ...j, status: newStatus } : j))
     );
+    try {
+      await supabase.from('custom_designs').update({ status: newStatus }).eq('id', jobId);
+    } catch (err) {}
     showToast(`Artwork Job ${jobId} updated to "${newStatus}"`);
   };
 
@@ -157,17 +255,27 @@ export default function AdminPage() {
   };
 
   // Product Image File Upload Handler
-  const handleProductImageUpload = (e) => {
+  const handleProductImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const previewUrl = URL.createObjectURL(file);
-      setProductForm({
-        ...productForm,
+      const localPreview = URL.createObjectURL(file);
+      setProductForm(prev => ({
+        ...prev,
         imageType: 'upload',
-        uploadedImagePreview: previewUrl,
-        imageUrl: previewUrl,
-      });
-      showToast(`Uploaded custom image: ${file.name}`);
+        uploadedImagePreview: localPreview,
+        imageUrl: localPreview,
+      }));
+      showToast(`Uploading ${file.name} to Supabase...`);
+
+      const publicUrl = await uploadProductImage(file);
+      if (publicUrl) {
+        setProductForm(prev => ({
+          ...prev,
+          imageUrl: publicUrl,
+          uploadedImagePreview: publicUrl,
+        }));
+        showToast(`Uploaded ${file.name} to Supabase Storage!`);
+      }
     }
   };
 

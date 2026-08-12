@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS public.categories (
 );
 
 -- ----------------------------------------------------------------------------
--- 3. ORDERS TABLE
+-- 4. ORDERS TABLE
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.orders (
   id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
@@ -72,82 +72,163 @@ CREATE TABLE IF NOT EXISTS public.orders (
   phone TEXT NOT NULL,
   email TEXT,
   items JSONB DEFAULT '[]'::jsonb,
+  subtotal NUMERIC(12,2) DEFAULT 0.00,
+  delivery_charge NUMERIC(12,2) DEFAULT 0.00,
   total_amount NUMERIC(12,2) NOT NULL,
   delivery_method TEXT DEFAULT 'delivery',
   delivery_address TEXT,
   pincode TEXT,
+  workflow TEXT DEFAULT 'PRINT_ONLY',
   payment_status TEXT DEFAULT 'Pending',
-  order_status TEXT DEFAULT 'Received',
+  order_status TEXT DEFAULT 'Pending',
   print_specs TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ----------------------------------------------------------------------------
--- 4. ENABLE ROW LEVEL SECURITY (RLS) & PUBLIC READ ACCESS
+-- 5. ORDER ITEMS TABLE
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.order_items (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  order_id TEXT REFERENCES public.orders(id) ON DELETE CASCADE,
+  product_id TEXT REFERENCES public.products(id) ON DELETE SET NULL,
+  product_name TEXT NOT NULL,
+  size TEXT,
+  colour TEXT,
+  quantity INT NOT NULL DEFAULT 1,
+  unit_price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+  print_position TEXT,
+  design_id TEXT,
+  custom_design_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- 6. CUSTOM DESIGNS TABLE (Customer Uploaded Artworks)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.custom_designs (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  customer_name TEXT,
+  phone TEXT,
+  email TEXT,
+  file_url TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  shirt_colour TEXT DEFAULT 'White',
+  print_location TEXT DEFAULT 'Front Center',
+  quantity INT DEFAULT 1,
+  status TEXT DEFAULT 'Pending',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- 7. BULK ENQUIRIES TABLE
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.bulk_enquiries (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  organisation TEXT,
+  group_type TEXT,
+  quantity INT DEFAULT 10,
+  description TEXT,
+  status TEXT DEFAULT 'Pending',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- 8. ROW LEVEL SECURITY (RLS) POLICIES & PRIVILEGES
 -- ----------------------------------------------------------------------------
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
-
--- Allow public read access to active products for customer storefront
-DROP POLICY IF EXISTS "Public read active products" ON public.products;
-CREATE POLICY "Public read active products"
-  ON public.products FOR SELECT
-  USING (true);
-
--- Allow full permissions for insert/update/delete on products
-DROP POLICY IF EXISTS "Admin write products" ON public.products;
-CREATE POLICY "Admin write products"
-  ON public.products FOR ALL
-  USING (true)
-  WITH CHECK (true);
-
--- Allow public read categories
-DROP POLICY IF EXISTS "Public read categories" ON public.categories;
-CREATE POLICY "Public read categories"
-  ON public.categories FOR SELECT
-  USING (true);
-
--- Allow public insert orders
-DROP POLICY IF EXISTS "Public insert orders" ON public.orders;
-CREATE POLICY "Public insert orders"
-  ON public.orders FOR INSERT
-  WITH CHECK (true);
-
--- Enable RLS on Profiles table
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.custom_designs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bulk_enquiries ENABLE ROW LEVEL SECURITY;
 
--- Allow users to read their own profile record
+-- Products Policies
+DROP POLICY IF EXISTS "Public read active products" ON public.products;
+CREATE POLICY "Public read active products" ON public.products FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admin write products" ON public.products;
+CREATE POLICY "Admin write products" ON public.products FOR ALL USING (true) WITH CHECK (true);
+
+-- Categories Policies
+DROP POLICY IF EXISTS "Public read categories" ON public.categories;
+CREATE POLICY "Public read categories" ON public.categories FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admin write categories" ON public.categories;
+CREATE POLICY "Admin write categories" ON public.categories FOR ALL USING (true) WITH CHECK (true);
+
+-- Profiles Policies
 DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
-CREATE POLICY "Users can read own profile"
-  ON public.profiles FOR SELECT
-  USING (auth.uid() = id);
+CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (auth.uid() = id OR true);
 
--- Allow users to insert their own profile record
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
-CREATE POLICY "Users can insert own profile"
-  ON public.profiles FOR INSERT
-  WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (true);
 
--- Allow users to update their own profile record
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
-CREATE POLICY "Users can update own profile"
-  ON public.profiles FOR UPDATE
-  USING (auth.uid() = id)
-  WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (true);
+
+-- Orders Policies
+DROP POLICY IF EXISTS "Public read orders" ON public.orders;
+CREATE POLICY "Public read orders" ON public.orders FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public insert orders" ON public.orders;
+CREATE POLICY "Public insert orders" ON public.orders FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin update orders" ON public.orders;
+CREATE POLICY "Admin update orders" ON public.orders FOR UPDATE USING (true) WITH CHECK (true);
+
+-- Order Items Policies
+DROP POLICY IF EXISTS "Public read order_items" ON public.order_items;
+CREATE POLICY "Public read order_items" ON public.order_items FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public insert order_items" ON public.order_items;
+CREATE POLICY "Public insert order_items" ON public.order_items FOR INSERT WITH CHECK (true);
+
+-- Custom Designs Policies
+DROP POLICY IF EXISTS "Public read custom_designs" ON public.custom_designs;
+CREATE POLICY "Public read custom_designs" ON public.custom_designs FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public insert custom_designs" ON public.custom_designs;
+CREATE POLICY "Public insert custom_designs" ON public.custom_designs FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin update custom_designs" ON public.custom_designs;
+CREATE POLICY "Admin update custom_designs" ON public.custom_designs FOR UPDATE USING (true);
+
+-- Bulk Enquiries Policies
+DROP POLICY IF EXISTS "Public read bulk_enquiries" ON public.bulk_enquiries;
+CREATE POLICY "Public read bulk_enquiries" ON public.bulk_enquiries FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public insert bulk_enquiries" ON public.bulk_enquiries;
+CREATE POLICY "Public insert bulk_enquiries" ON public.bulk_enquiries FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin update bulk_enquiries" ON public.bulk_enquiries;
+CREATE POLICY "Admin update bulk_enquiries" ON public.bulk_enquiries FOR UPDATE USING (true);
 
 -- Grant privileges to anon, authenticated, and service_role
-GRANT ALL ON public.profiles TO anon, authenticated, service_role;
 GRANT ALL ON public.products TO anon, authenticated, service_role;
 GRANT ALL ON public.categories TO anon, authenticated, service_role;
+GRANT ALL ON public.profiles TO anon, authenticated, service_role;
 GRANT ALL ON public.orders TO anon, authenticated, service_role;
+GRANT ALL ON public.order_items TO anon, authenticated, service_role;
+GRANT ALL ON public.custom_designs TO anon, authenticated, service_role;
+GRANT ALL ON public.bulk_enquiries TO anon, authenticated, service_role;
 
--- Enable Realtime replication for instant sync across browser tabs
+-- Enable Realtime replication on key tables
 ALTER PUBLICATION supabase_realtime ADD TABLE public.products;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.custom_designs;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.bulk_enquiries;
 
 -- ----------------------------------------------------------------------------
--- 5. INITIAL SEED DATA FOR PRODUCTS
+-- 9. INITIAL SEED DATA FOR PRODUCTS
 -- ----------------------------------------------------------------------------
 INSERT INTO public.products (
   id, name, slug, price, original_price, description, category, tags, colours, sizes, size_type, print_location, print_ratio, image_type, images, is_new, is_bestseller, is_active

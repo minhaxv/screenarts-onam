@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Search, Package, Clock, CheckCircle2, Truck, Store, AlertCircle, FileText, ArrowLeft, Phone, MapPin, Eye } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { formatPrice } from '../data/products';
 import './OrdersPage.css';
 
@@ -23,59 +24,44 @@ export default function OrdersPage() {
   const [error, setError] = useState(null);
 
   const fetchOrder = async (query) => {
-    if (!query.trim()) return;
+    const cleanQuery = query?.trim();
+    if (!cleanQuery) return;
     setLoading(true);
     setError(null);
+
     try {
-      // Fetch from API server or fallback to mock data
-      const res = await fetch(`http://localhost:5000/api/orders/${encodeURIComponent(query.trim())}`);
-      if (res.ok) {
-        const data = await res.json();
-        setOrder(data);
-      } else {
-        // Mock fallback for testing
-        if (query.toUpperCase() === 'ORD-8096' || query === '9447355667') {
-          setOrder({
-            orderNumber: 'ORD-8096',
-            workflow: 'PRINT_SETUP',
-            customerName: 'Kavitha Unni',
-            phone: '+91 94473 55667',
-            email: 'kavitha.unni@gmail.com',
-            deliveryMethod: 'pickup',
-            deliveryAddress: 'ScreenArts Studio Pickup (Calicut Store)',
-            pincode: '673001',
-            items: [
-              { name: 'Kasavu Edition', colour: 'White', size: 'M', printLocation: 'Front Center', quantity: 2, price: 699, customText: 'ഹാപ്പി ഓണം' }
-            ],
-            totalAmount: 1398,
-            paymentStatus: 'Paid (UPI)',
-            status: 'Production',
-            createdAt: '2026-08-11T12:00:00Z',
-          });
-        } else {
-          setError(`No order found matching "${query}". Please check your Order Number (e.g. ORD-8096) or Phone Number.`);
-          setOrder(null);
-        }
-      }
-    } catch (err) {
-      // Fallback fallback order search
-      if (query.toUpperCase().includes('ORD') || query.length >= 10) {
+      // Direct database query on Supabase orders table by order_number, phone, or email
+      const { data, error: dbError } = await supabase
+        .from('orders')
+        .select('*')
+        .or(`order_number.ilike.%${cleanQuery}%,phone.ilike.%${cleanQuery}%,email.ilike.%${cleanQuery}%`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!dbError && data) {
         setOrder({
-          orderNumber: query.toUpperCase().startsWith('ORD') ? query.toUpperCase() : 'ORD-8096',
-          workflow: 'PRINT_ONLY',
-          customerName: 'Customer',
-          phone: query,
-          deliveryMethod: 'home',
-          deliveryAddress: 'Mavoor Road, Calicut, Kerala',
-          pincode: '673001',
-          items: [{ name: 'Onam Graphic Tee', colour: 'Kerala Green', size: 'L', quantity: 1, price: 499 }],
-          totalAmount: 499,
-          paymentStatus: 'Paid (UPI)',
-          status: 'Artwork Approved',
+          orderNumber: data.order_number,
+          workflow: data.workflow || 'PRINT_ONLY',
+          customerName: data.customer_name,
+          phone: data.phone,
+          email: data.email || '',
+          deliveryMethod: data.delivery_method || 'home',
+          deliveryAddress: data.delivery_address || '',
+          pincode: data.pincode || '',
+          items: Array.isArray(data.items) ? data.items : [],
+          totalAmount: Number(data.total_amount || 0),
+          paymentStatus: data.payment_status || 'Pending',
+          status: data.order_status || 'Pending',
+          createdAt: data.created_at,
         });
       } else {
-        setError('Unable to locate order. Please enter your full Order Number or Phone Number.');
+        setError(`No order found matching "${cleanQuery}". Please check your Order Number (e.g. ORD-8096) or Phone Number.`);
+        setOrder(null);
       }
+    } catch (err) {
+      setError('Unable to locate order. Please enter your full Order Number or Phone Number.');
+      setOrder(null);
     } finally {
       setLoading(false);
     }
