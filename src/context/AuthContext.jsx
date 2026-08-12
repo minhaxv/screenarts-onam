@@ -234,6 +234,14 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Helper to resolve production email redirect URL
+  const getAuthRedirectUrl = () => {
+    if (typeof window !== 'undefined' && window.location.origin) {
+      return `${window.location.origin}/auth/callback`;
+    }
+    return 'https://www.screenarts.online/auth/callback';
+  };
+
   // 4. EMAIL SIGNUP — Create Account
   const signUpWithEmail = async (email, password, name, phone = '') => {
     const cleanEmail = email?.trim().toLowerCase();
@@ -247,12 +255,15 @@ export function AuthProvider({ children }) {
       return { success: false, error: 'Please enter your full name.' };
     }
 
+    const redirectUrl = getAuthRedirectUrl();
+
     setAuthLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password: password,
         options: {
+          emailRedirectTo: redirectUrl,
           data: {
             full_name: name.trim(),
             name: name.trim(),
@@ -269,7 +280,7 @@ export function AuthProvider({ children }) {
         const loggedUser = formatUserObject(data.user);
         setUser(loggedUser);
         await syncUserProfileToDatabase(data.user.id, cleanEmail, name.trim(), phone.trim());
-        return { success: true, user: loggedUser, message: 'Account created successfully!' };
+        return { success: true, user: loggedUser, message: 'Account created successfully! Check your email to confirm.' };
       }
 
       return { success: true, message: 'Account created! Please check your email for confirmation.' };
@@ -287,10 +298,12 @@ export function AuthProvider({ children }) {
       return { success: false, error: 'Enter a valid email address.' };
     }
 
+    const redirectUrl = getAuthRedirectUrl();
+
     setAuthLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: `${window.location.origin}/account`,
+        redirectTo: redirectUrl,
       });
 
       if (error) {
@@ -312,11 +325,14 @@ export function AuthProvider({ children }) {
       return { success: false, error: 'Enter a valid email address.' };
     }
 
+    const redirectUrl = getAuthRedirectUrl();
+
     setAuthLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
+          emailRedirectTo: redirectUrl,
           shouldCreateUser: true,
           data: {
             full_name: metadata.name || '',

@@ -21,6 +21,7 @@ import ContactPage from './pages/ContactPage';
 import AdminPage from './pages/AdminPage';
 import DiagnosticsPage from './pages/DiagnosticsPage';
 import AccountPage from './pages/AccountPage';
+import AuthCallbackPage from './pages/AuthCallbackPage';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -53,6 +54,7 @@ function AppContent() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/diagnostics" element={<DiagnosticsPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </main>
