@@ -25,28 +25,6 @@ export default function AdminProtectedRoute({ children }) {
     return <Navigate to="/" replace />;
   }
 
-  // Check if role is admin
-  if (user.role !== 'admin') {
-    return (
-      <div className="container text-center py-16 page-enter" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="card p-8 text-center max-w-md w-full" style={{ borderRadius: '20px', border: '1px solid #E2E8F0' }}>
-          <ShieldAlert size={48} className="mx-auto mb-4" style={{ color: '#DC2626' }} />
-          <h2 className="heading-3 mb-2" style={{ color: '#1A1A2E' }}>403 — Unauthorized Access</h2>
-          <p className="text-muted text-xs mb-4">
-            Your account (<strong>{user.email || user.phone}</strong>) has customer access privileges only. Administrator rights are required to access this area.
-          </p>
-          <div className="flex flex-col gap-2">
-            <Link to="/account" className="btn btn-primary btn-sm">
-              <UserCheck size={16} /> Go to Customer Account
-            </Link>
-            <Link to="/" className="btn btn-ghost btn-sm">
-              Back to Storefront
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Allow access to AdminPage (which has Studio Passcode 2026 unlock screen)
   return children;
 }
