@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
   const url = process.env.SUPABASE_URL || 'https://qysjkjvhtsrmiosoiagi.supabase.co';
-  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_3lMHnlhZOkp9B6ZP464KCg_oJ_ilZQH';
 
   if (!url || !key) {
     return res.status(500).json({
