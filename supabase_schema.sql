@@ -225,15 +225,25 @@ DROP POLICY IF EXISTS "Users can read own orders" ON public.orders;
 DROP POLICY IF EXISTS "Users can insert own order" ON public.orders;
 DROP POLICY IF EXISTS "Admin delete orders" ON public.orders;
 DROP POLICY IF EXISTS "Public update orders" ON public.orders;
+DROP POLICY IF EXISTS "Customers can create their own orders" ON public.orders;
+DROP POLICY IF EXISTS "Customers can view their own orders" ON public.orders;
+DROP POLICY IF EXISTS "Admin view all orders" ON public.orders;
+DROP POLICY IF EXISTS "Admin update all orders" ON public.orders;
 
-CREATE POLICY "Public read orders" ON public.orders
-  FOR SELECT USING (true);
+-- Customer can create ONLY their own orders
+CREATE POLICY "Customers can create their own orders" ON public.orders
+  FOR INSERT TO authenticated
+  WITH CHECK ((SELECT auth.uid()) = user_id OR public.is_admin());
 
-CREATE POLICY "Public insert orders" ON public.orders
-  FOR INSERT WITH CHECK (true);
+-- Customer can view ONLY their own orders (or Admin can view all)
+CREATE POLICY "Customers can view their own orders" ON public.orders
+  FOR SELECT TO authenticated
+  USING ((SELECT auth.uid()) = user_id OR public.is_admin());
 
-CREATE POLICY "Public update orders" ON public.orders
-  FOR UPDATE USING (true) WITH CHECK (true);
+-- Admin can update orders status
+CREATE POLICY "Admin update all orders" ON public.orders
+  FOR UPDATE TO authenticated
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- 5. ORDER ITEMS POLICIES
 DROP POLICY IF EXISTS "Public read order_items" ON public.order_items;
@@ -242,15 +252,32 @@ DROP POLICY IF EXISTS "Users can read own order items" ON public.order_items;
 DROP POLICY IF EXISTS "Users can insert order items" ON public.order_items;
 DROP POLICY IF EXISTS "Admin update order items" ON public.order_items;
 DROP POLICY IF EXISTS "Public update order_items" ON public.order_items;
+DROP POLICY IF EXISTS "Customers can view their own order items" ON public.order_items;
+DROP POLICY IF EXISTS "Customers can create order items for own order" ON public.order_items;
 
-CREATE POLICY "Public read order_items" ON public.order_items
-  FOR SELECT USING (true);
+CREATE POLICY "Customers can view their own order items" ON public.order_items
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.orders
+      WHERE orders.id = order_items.order_id
+      AND (orders.user_id = (SELECT auth.uid()) OR public.is_admin())
+    )
+  );
 
-CREATE POLICY "Public insert order_items" ON public.order_items
-  FOR INSERT WITH CHECK (true);
+CREATE POLICY "Customers can create order items for own order" ON public.order_items
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.orders
+      WHERE orders.id = order_items.order_id
+      AND (orders.user_id = (SELECT auth.uid()) OR public.is_admin())
+    )
+  );
 
-CREATE POLICY "Public update order_items" ON public.order_items
-  FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Admin update order items" ON public.order_items
+  FOR UPDATE TO authenticated
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 -- 6. CUSTOM DESIGNS POLICIES
 -- Customers can read ONLY their own custom design uploads. Admin can access all.
