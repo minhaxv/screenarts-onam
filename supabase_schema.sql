@@ -434,3 +434,64 @@ ON CONFLICT (id) DO UPDATE SET
   sizes = EXCLUDED.sizes,
   is_active = EXCLUDED.is_active,
   updated_at = NOW();
+
+-- ----------------------------------------------------------------------------
+-- 10. ORDER STATUS HISTORY TABLE
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.order_status_history (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  order_id TEXT REFERENCES public.orders(id) ON DELETE CASCADE,
+  old_status TEXT,
+  new_status TEXT NOT NULL,
+  changed_by TEXT,
+  note TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- 11. PAYMENT TRANSACTIONS TABLE
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.payment_transactions (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  order_id TEXT REFERENCES public.orders(id) ON DELETE CASCADE,
+  transaction_id TEXT,
+  payment_method TEXT DEFAULT 'UPI',
+  amount NUMERIC(10,2) NOT NULL,
+  status TEXT DEFAULT 'Pending',
+  gateway TEXT DEFAULT 'Razorpay / Offline',
+  reference TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- 12. ADMIN ACTIVITY LOG TABLE
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.admin_activity_log (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  admin_user_id UUID REFERENCES auth.users(id),
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT,
+  old_value TEXT,
+  new_value TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.order_status_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_activity_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow read order_status_history" ON public.order_status_history FOR SELECT USING (true);
+CREATE POLICY "Allow insert order_status_history" ON public.order_status_history FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Allow read payment_transactions" ON public.payment_transactions FOR SELECT USING (true);
+CREATE POLICY "Allow insert payment_transactions" ON public.payment_transactions FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update payment_transactions" ON public.payment_transactions FOR UPDATE USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow read admin_activity_log" ON public.admin_activity_log FOR SELECT USING (true);
+CREATE POLICY "Allow insert admin_activity_log" ON public.admin_activity_log FOR INSERT WITH CHECK (true);
+
+GRANT ALL ON public.order_status_history TO anon, authenticated, service_role;
+GRANT ALL ON public.payment_transactions TO anon, authenticated, service_role;
+GRANT ALL ON public.admin_activity_log TO anon, authenticated, service_role;
