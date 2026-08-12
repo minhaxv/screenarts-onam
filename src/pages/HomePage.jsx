@@ -150,13 +150,21 @@ function CollectionSection() {
           </div>
         </RevealSection>
 
-        <div className="grid grid-5 products-grid">
-          {activeProducts.slice(0, 10).map((product, i) => (
-            <RevealSection key={product.id} delay={i * 0.05}>
-              <ProductCard product={product} />
-            </RevealSection>
-          ))}
-        </div>
+        {activeProducts.length > 0 ? (
+          <div className="grid grid-5 products-grid">
+            {activeProducts.slice(0, 10).map((product, i) => (
+              <RevealSection key={product.id} delay={i * 0.05}>
+                <ProductCard product={product} />
+              </RevealSection>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 card-cream rounded-2xl p-6 border max-w-lg mx-auto">
+            <p className="font-bold text-charcoal">No products currently listed in the store catalog.</p>
+            <p className="text-xs text-muted mt-1">Products added by ScreenArts administrators will appear here instantly.</p>
+            <Link to="/customize" className="btn btn-primary btn-sm mt-4">🎨 Create Custom T-Shirt</Link>
+          </div>
+        )}
 
         <RevealSection>
           <div className="text-center mt-8">

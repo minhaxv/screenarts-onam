@@ -67,9 +67,9 @@ export function ProductProvider({ children }) {
   const [products, setProducts] = useState(() => {
     try {
       const saved = localStorage.getItem('screenarts_products');
-      return saved ? JSON.parse(saved) : initialProducts;
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
-      return initialProducts;
+      return [];
     }
   });
 
@@ -130,19 +130,6 @@ export function ProductProvider({ children }) {
     }
   };
 
-  // Seed Supabase with initial product dataset if empty or uninitialized
-  const seedSupabaseIfNeeded = async () => {
-    try {
-      const recordsToSeed = initialProducts.map(mapProductToSupabase);
-      const { error } = await supabase.from('products').upsert(recordsToSeed);
-      if (!error) {
-        console.log('Initialized and seeded Supabase products table successfully.');
-      }
-    } catch (err) {
-      console.warn('Supabase auto-seed notice:', err.message);
-    }
-  };
-
   // Primary Database Fetch: Load Products directly from Supabase
   const fetchFromDatabase = useCallback(async () => {
     setIsLoadingDB(true);
@@ -153,14 +140,12 @@ export function ProductProvider({ children }) {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         const formatted = data.map(mapSupabaseToProduct);
         setProducts(formatted);
         localStorage.setItem('screenarts_products', JSON.stringify(formatted));
-      } else if (error && (error.code === 'PGRST205' || error.code === '42P01')) {
-        await seedSupabaseIfNeeded();
-      } else if (!data || data.length === 0) {
-        await seedSupabaseIfNeeded();
+      } else {
+        setProducts([]);
       }
 
       // 2. Fetch Categories from Supabase

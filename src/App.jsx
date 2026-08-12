@@ -19,6 +19,7 @@ import CheckoutPage from './pages/CheckoutPage';
 import OrdersPage from './pages/OrdersPage';
 import ContactPage from './pages/ContactPage';
 import AdminPage from './pages/AdminPage';
+import DiagnosticsPage from './pages/DiagnosticsPage';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -49,6 +50,7 @@ function AppContent() {
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/contact" element={<ContactPage />} />
+          <Route path="/diagnostics" element={<DiagnosticsPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </main>

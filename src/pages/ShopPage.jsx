@@ -112,10 +112,11 @@ export default function ShopPage() {
         </div>
 
         {filteredProducts.length === 0 && (
-          <div className="shop-empty">
-            <p>No designs found in this category.</p>
+          <div className="shop-empty text-center py-12">
+            <p className="font-bold text-charcoal">No products currently listed in the catalog.</p>
+            <p className="text-xs text-muted mt-1">Products added by ScreenArts administrators will appear here instantly.</p>
             <button className="btn btn-outline mt-4" onClick={() => setActiveCategory('all')}>
-              View All Designs
+              View All Categories
             </button>
           </div>
         )}

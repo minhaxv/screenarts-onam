@@ -612,8 +612,8 @@ export default function AdminPage() {
                   <div className="admin-stat-card__icon admin-stat-card__icon--green">₹</div>
                   <div className="admin-stat-card__info">
                     <span className="admin-stat-card__label">Total Revenue</span>
-                    <span className="admin-stat-card__val">{formatPrice(STUDIO_STATS.totalRevenue)}</span>
-                    <span className="admin-stat-card__trend text-green">↑ 34% vs last week</span>
+                    <span className="admin-stat-card__val">{formatPrice(orders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0))}</span>
+                    <span className="admin-stat-card__trend text-green">Calculated from live orders</span>
                   </div>
                 </div>
 
@@ -622,7 +622,7 @@ export default function AdminPage() {
                   <div className="admin-stat-card__info">
                     <span className="admin-stat-card__label">Active Orders</span>
                     <span className="admin-stat-card__val">{orders.length} Orders</span>
-                    <span className="admin-stat-card__trend">{orders.filter(o => o.status === 'Printing in Progress').length} currently printing</span>
+                    <span className="admin-stat-card__trend">{orders.filter(o => o.status === 'Production' || o.status === 'Printing in Progress').length} in production</span>
                   </div>
                 </div>
 
@@ -631,7 +631,7 @@ export default function AdminPage() {
                   <div className="admin-stat-card__info">
                     <span className="admin-stat-card__label">Custom Print Queue</span>
                     <span className="admin-stat-card__val">{customJobs.length} Jobs</span>
-                    <span className="admin-stat-card__trend text-orange">2 pending proof approval</span>
+                    <span className="admin-stat-card__trend text-orange">{customJobs.filter(j => j.status === 'Pending').length} pending review</span>
                   </div>
                 </div>
 
@@ -640,7 +640,7 @@ export default function AdminPage() {
                   <div className="admin-stat-card__info">
                     <span className="admin-stat-card__label">Bulk Quote Leads</span>
                     <span className="admin-stat-card__val">{bulkQuotes.length} Quotes</span>
-                    <span className="admin-stat-card__trend">Avg quantity: 73 pcs</span>
+                    <span className="admin-stat-card__trend">{bulkQuotes.filter(q => q.status === 'Pending').length} new enquiries</span>
                   </div>
                 </div>
               </div>

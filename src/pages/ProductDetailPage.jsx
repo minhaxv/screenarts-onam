@@ -12,7 +12,7 @@ export default function ProductDetailPage() {
   const { products } = useProducts();
   const activeProducts = products.filter(p => p.isActive !== false);
   const { slug } = useParams();
-  const product = activeProducts.find(p => p.slug === slug || p.id === slug) || activeProducts[0] || products[0];
+  const product = activeProducts.find(p => p.slug === slug || String(p.id) === slug);
   const { addItem } = useCart();
 
   const [selectedColour, setSelectedColour] = useState(product?.colours?.[0] || 'white');
@@ -25,6 +25,16 @@ export default function ProductDetailPage() {
   const [activeTab, setActiveTab] = useState('size-guide');
   const [sizeChartMode, setSizeChartMode] = useState('adult');
   const [added, setAdded] = useState(false);
+
+  if (!product) {
+    return (
+      <div className="container text-center py-16 page-enter" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <h2 className="heading-3">Product Not Found</h2>
+        <p className="text-muted mt-2">The requested product is unavailable or has been removed from the database.</p>
+        <Link to="/shop" className="btn btn-primary mt-4">Browse Collection</Link>
+      </div>
+    );
+  }
 
   const colourData = TSHIRT_COLOURS.find(c => c.id === selectedColour);
   const ratioData = PRINT_RATIOS.find(r => r.id === printRatio);
