@@ -117,35 +117,37 @@ export default function CheckoutPage() {
         .single();
 
       if (orderError) {
-        console.warn('Notice saving order to Supabase:', orderError.message);
+        console.error('Database Order Insertion Error:', orderError.message);
+        setErrorMsg(orderError.message || 'Unable to place order in database. Please try again.');
+        setIsSubmitting(false);
+        return;
       }
 
-      // 3. Insert Detail Records into Supabase `order_items` table
-      const parentOrderId = createdOrder?.id || orderNum;
-      const orderItemsPayload = validatedItems.map(it => ({
-        order_id: parentOrderId,
-        product_id: it.productId || null,
-        product_name: it.name,
-        size: it.size,
-        colour: it.colour,
-        quantity: it.quantity,
-        unit_price: it.price,
-        print_position: it.printLocation,
-        custom_design_url: it.customDesignUrl || null,
-      }));
-
+      // 3. Insert Detail Records into Supabase `order_items` table (safely catch if table schema is pending)
       try {
+        const parentOrderId = String(createdOrder?.id || orderNum);
+        const orderItemsPayload = validatedItems.map(it => ({
+          order_id: parentOrderId,
+          product_id: it.productId || null,
+          product_name: it.name,
+          size: it.size,
+          colour: it.colour,
+          quantity: it.quantity,
+          unit_price: it.price,
+          print_position: it.printLocation,
+          custom_design_url: it.customDesignUrl || null,
+        }));
         await supabase.from('order_items').insert(orderItemsPayload);
-      } catch (err) {}
+      } catch (err) {
+        console.warn('Notice inserting detail order_items:', err.message);
+      }
 
       setPlacedOrderNumber(orderNum);
       setOrderPlaced(true);
       clearCart();
     } catch (err) {
-      console.error('Order creation error:', err);
-      setPlacedOrderNumber(orderNum);
-      setOrderPlaced(true);
-      clearCart();
+      console.error('Order creation exception:', err);
+      setErrorMsg(err.message || 'Failed to complete order. Please check your connection.');
     } finally {
       setIsSubmitting(false);
     }

@@ -47,12 +47,12 @@ export default function AdminPage() {
   const fetchAdminDataFromSupabase = useCallback(async () => {
     try {
       // 1. Fetch Orders
-      const { data: dbOrders } = await supabase
+      const { data: dbOrders, error: orderErr } = await supabase
         .from('orders')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (Array.isArray(dbOrders) && dbOrders.length > 0) {
+      if (!orderErr && Array.isArray(dbOrders)) {
         const mappedOrders = dbOrders.map(ord => ({
           id: ord.order_number || ord.id,
           dbId: ord.id,
@@ -73,12 +73,12 @@ export default function AdminPage() {
       }
 
       // 2. Fetch Custom Designs
-      const { data: dbDesigns } = await supabase
+      const { data: dbDesigns, error: designErr } = await supabase
         .from('custom_designs')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (Array.isArray(dbDesigns) && dbDesigns.length > 0) {
+      if (!designErr && Array.isArray(dbDesigns)) {
         const mappedJobs = dbDesigns.map(j => ({
           id: j.id,
           customer: j.customer_name || 'Customer',
@@ -96,12 +96,12 @@ export default function AdminPage() {
       }
 
       // 3. Fetch Bulk Quotes
-      const { data: dbQuotes } = await supabase
+      const { data: dbQuotes, error: quoteErr } = await supabase
         .from('bulk_enquiries')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (Array.isArray(dbQuotes) && dbQuotes.length > 0) {
+      if (!quoteErr && Array.isArray(dbQuotes)) {
         const mappedQuotes = dbQuotes.map(q => ({
           id: q.id,
           organization: q.organisation || q.name || 'Group Request',
@@ -124,6 +124,24 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchAdminDataFromSupabase();
+
+    // Subscribe to live Realtime updates on orders, custom_designs, and bulk_enquiries
+    const adminChannel = supabase
+      .channel('admin-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchAdminDataFromSupabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_designs' }, () => {
+        fetchAdminDataFromSupabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bulk_enquiries' }, () => {
+        fetchAdminDataFromSupabase();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(adminChannel);
+    };
   }, [fetchAdminDataFromSupabase]);
 
   const handleAdminUnlock = (e) => {
