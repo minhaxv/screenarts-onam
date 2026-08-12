@@ -22,6 +22,7 @@ import AdminPage from './pages/AdminPage';
 import DiagnosticsPage from './pages/DiagnosticsPage';
 import AccountPage from './pages/AccountPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
+import AdminProtectedRoute from './components/auth/AdminProtectedRoute';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -55,7 +56,22 @@ function AppContent() {
           <Route path="/diagnostics" element={<DiagnosticsPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route
+            path="/admin/*"
+            element={
+              <AdminProtectedRoute>
+                <AdminPage />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <AdminProtectedRoute>
+                <AdminPage />
+              </AdminProtectedRoute>
+            }
+          />
         </Routes>
       </main>
       {!isAdmin && <Footer />}
