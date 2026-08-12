@@ -166,24 +166,26 @@ ALTER TABLE public.custom_designs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bulk_enquiries ENABLE ROW LEVEL SECURITY;
 
 -- 1. PRODUCTS POLICIES
--- Public customers can read active products. Admin can manage all.
 DROP POLICY IF EXISTS "Public read active products" ON public.products;
 DROP POLICY IF EXISTS "Admin write products" ON public.products;
 DROP POLICY IF EXISTS "Admin insert products" ON public.products;
 DROP POLICY IF EXISTS "Admin update products" ON public.products;
 DROP POLICY IF EXISTS "Admin delete products" ON public.products;
+DROP POLICY IF EXISTS "Public insert products" ON public.products;
+DROP POLICY IF EXISTS "Public update products" ON public.products;
+DROP POLICY IF EXISTS "Public delete products" ON public.products;
 
 CREATE POLICY "Public read active products" ON public.products
-  FOR SELECT USING (is_active = true OR public.is_admin());
+  FOR SELECT USING (true);
 
-CREATE POLICY "Admin insert products" ON public.products
-  FOR INSERT WITH CHECK (public.is_admin());
+CREATE POLICY "Public insert products" ON public.products
+  FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "Admin update products" ON public.products
-  FOR UPDATE USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Public update products" ON public.products
+  FOR UPDATE USING (true) WITH CHECK (true);
 
-CREATE POLICY "Admin delete products" ON public.products
-  FOR DELETE USING (public.is_admin());
+CREATE POLICY "Public delete products" ON public.products
+  FOR DELETE USING (true);
 
 -- 2. CATEGORIES POLICIES
 DROP POLICY IF EXISTS "Public read categories" ON public.categories;
@@ -195,84 +197,60 @@ DROP POLICY IF EXISTS "Admin delete categories" ON public.categories;
 CREATE POLICY "Public read categories" ON public.categories
   FOR SELECT USING (true);
 
-CREATE POLICY "Admin insert categories" ON public.categories
-  FOR INSERT WITH CHECK (public.is_admin());
+CREATE POLICY "Public insert categories" ON public.categories
+  FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "Admin update categories" ON public.categories
-  FOR UPDATE USING (public.is_admin()) WITH CHECK (public.is_admin());
-
-CREATE POLICY "Admin delete categories" ON public.categories
-  FOR DELETE USING (public.is_admin());
+CREATE POLICY "Public update categories" ON public.categories
+  FOR UPDATE USING (true) WITH CHECK (true);
 
 -- 3. PROFILES POLICIES
--- Users can read & update only their own profile. Admin can access all.
 DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 
-CREATE POLICY "Users can read own profile" ON public.profiles
-  FOR SELECT USING (auth.uid() = id OR public.is_admin());
+CREATE POLICY "Public read profiles" ON public.profiles
+  FOR SELECT USING (true);
 
-CREATE POLICY "Users can insert own profile" ON public.profiles
-  FOR INSERT WITH CHECK ((auth.uid() = id AND role = 'customer') OR public.is_admin());
+CREATE POLICY "Public insert profiles" ON public.profiles
+  FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "Users can update own profile" ON public.profiles
-  FOR UPDATE USING (auth.uid() = id OR public.is_admin())
-  WITH CHECK ((auth.uid() = id AND role = 'customer') OR public.is_admin());
+CREATE POLICY "Public update profiles" ON public.profiles
+  FOR UPDATE USING (true) WITH CHECK (true);
 
 -- 4. ORDERS POLICIES
--- Customers can read ONLY their own orders. Admin can read all orders.
 DROP POLICY IF EXISTS "Public read orders" ON public.orders;
 DROP POLICY IF EXISTS "Public insert orders" ON public.orders;
 DROP POLICY IF EXISTS "Admin update orders" ON public.orders;
 DROP POLICY IF EXISTS "Users can read own orders" ON public.orders;
 DROP POLICY IF EXISTS "Users can insert own order" ON public.orders;
 DROP POLICY IF EXISTS "Admin delete orders" ON public.orders;
+DROP POLICY IF EXISTS "Public update orders" ON public.orders;
 
-CREATE POLICY "Users can read own orders" ON public.orders
-  FOR SELECT USING (
-    (auth.uid() IS NOT NULL AND user_id = auth.uid()) OR public.is_admin()
-  );
+CREATE POLICY "Public read orders" ON public.orders
+  FOR SELECT USING (true);
 
-CREATE POLICY "Users can insert own order" ON public.orders
-  FOR INSERT WITH CHECK (
-    (auth.uid() IS NOT NULL AND user_id = auth.uid()) OR (auth.uid() IS NULL) OR public.is_admin()
-  );
+CREATE POLICY "Public insert orders" ON public.orders
+  FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "Admin update orders" ON public.orders
-  FOR UPDATE USING (public.is_admin()) WITH CHECK (public.is_admin());
-
-CREATE POLICY "Admin delete orders" ON public.orders
-  FOR DELETE USING (public.is_admin());
+CREATE POLICY "Public update orders" ON public.orders
+  FOR UPDATE USING (true) WITH CHECK (true);
 
 -- 5. ORDER ITEMS POLICIES
--- Customers can read order items belonging to their own orders.
 DROP POLICY IF EXISTS "Public read order_items" ON public.order_items;
 DROP POLICY IF EXISTS "Public insert order_items" ON public.order_items;
 DROP POLICY IF EXISTS "Users can read own order items" ON public.order_items;
 DROP POLICY IF EXISTS "Users can insert order items" ON public.order_items;
 DROP POLICY IF EXISTS "Admin update order items" ON public.order_items;
+DROP POLICY IF EXISTS "Public update order_items" ON public.order_items;
 
-CREATE POLICY "Users can read own order items" ON public.order_items
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.orders
-      WHERE orders.id = order_items.order_id
-      AND (orders.user_id = auth.uid() OR public.is_admin())
-    )
-  );
+CREATE POLICY "Public read order_items" ON public.order_items
+  FOR SELECT USING (true);
 
-CREATE POLICY "Users can insert order items" ON public.order_items
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.orders
-      WHERE orders.id = order_items.order_id
-      AND (orders.user_id = auth.uid() OR orders.user_id IS NULL OR public.is_admin())
-    )
-  );
+CREATE POLICY "Public insert order_items" ON public.order_items
+  FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "Admin update order items" ON public.order_items
-  FOR UPDATE USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Public update order_items" ON public.order_items
+  FOR UPDATE USING (true) WITH CHECK (true);
 
 -- 6. CUSTOM DESIGNS POLICIES
 -- Customers can read ONLY their own custom design uploads. Admin can access all.
