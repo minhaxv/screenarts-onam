@@ -4,15 +4,7 @@ import { supabase } from '../lib/supabase';
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('screenarts_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
-
+  const [user, setUser] = useState(null);
   const [adminAuthenticated, setAdminAuthenticated] = useState(() => {
     try {
       return localStorage.getItem('screenarts_admin_auth') === 'true';
@@ -23,221 +15,195 @@ export function AuthProvider({ children }) {
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
 
   // Helper to upsert user profile into Supabase public.profiles table
-  const syncUserProfileToDatabase = async (userId, email, fullName, phone) => {
+  const syncUserProfileToDatabase = async (userId, email, fullName = '', phone = '') => {
+    if (!userId || !email) return;
     try {
-      await supabase.from('profiles').upsert([
+      const { error } = await supabase.from('profiles').upsert(
         {
           id: userId,
-          email,
-          full_name: fullName,
+          email: email,
+          full_name: fullName || email.split('@')[0],
           phone: phone || '',
           role: 'customer',
           updated_at: new Date().toISOString(),
         },
-      ]);
+        { onConflict: 'id' }
+      );
+      if (error) {
+        console.warn('Notice syncing Supabase profile:', error.message);
+      }
     } catch (err) {
-      console.warn('Supabase profiles table sync notice:', err.message);
+      console.warn('Notice syncing profile:', err.message);
     }
   };
 
-  // Sync Supabase Auth State
+  // Helper to map Supabase User session object to state
+  const formatUserObject = (supabaseUser) => {
+    if (!supabaseUser) return null;
+    return {
+      id: supabaseUser.id,
+      email: supabaseUser.email,
+      name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'Customer',
+      phone: supabaseUser.phone || supabaseUser.user_metadata?.phone || '',
+      role: 'customer',
+    };
+  };
+
+  // Sync Supabase Auth State & restore session on startup
   useEffect(() => {
-    const syncSession = async () => {
+    const initSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn('Session retrieval note:', error.message);
+        }
         if (session?.user) {
-          const supabaseUser = {
-            id: session.user.id,
-            email: session.user.email,
-            phone: session.user.phone || session.user.user_metadata?.phone || '',
-            name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Customer',
-            role: 'customer',
-          };
-          setUser(supabaseUser);
-          syncUserProfileToDatabase(session.user.id, session.user.email, supabaseUser.name, supabaseUser.phone);
+          const formatted = formatUserObject(session.user);
+          setUser(formatted);
+          syncUserProfileToDatabase(session.user.id, session.user.email, formatted.name, formatted.phone);
+        } else {
+          setUser(null);
         }
       } catch (err) {
-        console.error('Supabase session sync error', err);
+        console.error('Supabase session sync error:', err);
+        setUser(null);
+      } finally {
+        setInitializing(false);
       }
     };
 
-    syncSession();
+    initSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        const supabaseUser = {
-          id: session.user.id,
-          email: session.user.email,
-          phone: session.user.phone || session.user.user_metadata?.phone || '',
-          name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Customer',
-          role: 'customer',
-        };
-        setUser(supabaseUser);
-        syncUserProfileToDatabase(session.user.id, session.user.email, supabaseUser.name, supabaseUser.phone);
-      } else if (_event === 'SIGNED_OUT') {
+        const formatted = formatUserObject(session.user);
+        setUser(formatted);
+        syncUserProfileToDatabase(session.user.id, session.user.email, formatted.name, formatted.phone);
+      } else {
         setUser(null);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
-
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('screenarts_user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('screenarts_user');
-    }
-  }, [user]);
 
   useEffect(() => {
     localStorage.setItem('screenarts_admin_auth', adminAuthenticated ? 'true' : 'false');
   }, [adminAuthenticated]);
 
-  // Supabase Email Password Login
-  const loginWithEmailPassword = async (email, password) => {
-    setAuthLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      if (data?.user) {
-        const loggedUser = {
-          id: data.user.id,
-          email: data.user.email,
-          name: data.user.user_metadata?.name || email.split('@')[0],
-          phone: data.user.user_metadata?.phone || '',
-          role: 'customer',
-        };
-        setUser(loggedUser);
-        syncUserProfileToDatabase(loggedUser.id, loggedUser.email, loggedUser.name, loggedUser.phone);
-        setIsLoginModalOpen(false);
-        return { success: true, user: loggedUser };
-      }
-    } catch (err) {
-      // Local fallback for offline/demo testing
-      const fallbackUser = { id: `user-${Date.now()}`, email, name: email.split('@')[0], role: 'customer' };
-      setUser(fallbackUser);
-      setIsLoginModalOpen(false);
-      return { success: true, user: fallbackUser, note: err.message };
-    } finally {
-      setAuthLoading(false);
+  // Unified Email OTP Flow - Step 1: Send real OTP code to Email
+  const sendOtp = async (email) => {
+    const cleanEmail = email?.trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return { success: false, error: 'Invalid email address' };
     }
-  };
 
-  // Supabase Email Registration
-  const registerWithEmail = async (email, password, name, phone) => {
     setAuthLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
+      const { error } = await supabase.auth.signInWithOtp({
+        email: cleanEmail,
         options: {
-          data: { name, phone },
+          shouldCreateUser: true, // Automatically creates user if new, logs in if existing
         },
       });
-      if (error) throw error;
-      if (data?.user) {
-        const newUser = {
-          id: data.user.id,
-          email: data.user.email,
-          name,
-          phone,
-          role: 'customer',
-        };
-        setUser(newUser);
-        syncUserProfileToDatabase(newUser.id, newUser.email, name, phone);
-        setIsLoginModalOpen(false);
-        return { success: true, user: newUser };
+
+      if (error) {
+        const msg = error.message?.toLowerCase() || '';
+        if (msg.includes('rate') || msg.includes('limit') || msg.includes('429') || msg.includes('too many')) {
+          return { success: false, error: 'Too many requests, please try again later' };
+        }
+        if (msg.includes('invalid') || msg.includes('email')) {
+          return { success: false, error: 'Invalid email address' };
+        }
+        return { success: false, error: error.message || 'Authentication failed' };
       }
+
+      return { success: true, message: 'Verification code sent' };
     } catch (err) {
-      const fallbackUser = { id: `user-${Date.now()}`, email, name, phone, role: 'customer' };
-      setUser(fallbackUser);
-      setIsLoginModalOpen(false);
-      return { success: true, user: fallbackUser };
+      return { success: false, error: 'Too many requests, please try again later' };
     } finally {
       setAuthLoading(false);
     }
   };
 
-  // Supabase Phone OTP Login
-  const loginWithPhoneOtp = async (phone) => {
+  // Unified Email OTP Flow - Step 2: Verify OTP code
+  const verifyOtp = async (email, token) => {
+    const cleanEmail = email?.trim().toLowerCase();
+    const cleanToken = token?.trim().replace(/\D/g, '');
+
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return { success: false, error: 'Invalid email address' };
+    }
+    if (!cleanToken || cleanToken.length < 6) {
+      return { success: false, error: 'Invalid verification code' };
+    }
+
     setAuthLoading(true);
     try {
-      const formattedPhone = phone.startsWith('+') ? phone : `+91${phone.replace(/\D/g, '')}`;
-      const { error } = await supabase.auth.signInWithOtp({ phone: formattedPhone });
-      if (error) console.log('Supabase OTP Note:', error.message);
-      return { success: true };
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: cleanEmail,
+        token: cleanToken,
+        type: 'email',
+      });
+
+      if (error) {
+        const msg = error.message?.toLowerCase() || '';
+        if (msg.includes('expired')) {
+          return { success: false, error: 'Verification code expired' };
+        }
+        if (msg.includes('invalid') || msg.includes('otp') || msg.includes('token') || msg.includes('code')) {
+          return { success: false, error: 'Invalid verification code' };
+        }
+        if (msg.includes('rate') || msg.includes('limit') || msg.includes('429') || msg.includes('attempts')) {
+          return { success: false, error: 'Too many attempts' };
+        }
+        return { success: false, error: error.message || 'Authentication failed' };
+      }
+
+      if (data?.user || data?.session?.user) {
+        const loggedUser = formatUserObject(data.user || data.session.user);
+        setUser(loggedUser);
+        await syncUserProfileToDatabase(loggedUser.id, loggedUser.email, loggedUser.name, loggedUser.phone);
+        return { success: true, user: loggedUser };
+      }
+
+      return { success: false, error: 'Authentication failed' };
     } catch (err) {
-      return { success: true };
+      return { success: false, error: 'Authentication failed' };
     } finally {
       setAuthLoading(false);
     }
   };
 
-  // Quick Customer Login
-  const loginUser = (phone, name = 'Customer', email = '') => {
-    const newUser = {
-      id: `user-${Date.now()}`,
-      name,
-      phone,
-      email,
-      role: 'customer',
-      loginDate: new Date().toISOString(),
-    };
-    setUser(newUser);
-    setIsLoginModalOpen(false);
-    return newUser;
-  };
-
+  // Sign out user
   const logoutUser = async () => {
+    setAuthLoading(true);
     try {
       await supabase.auth.signOut();
-    } catch (e) {}
-    setUser(null);
+    } catch (e) {
+      console.warn('Sign out error:', e);
+    } finally {
+      setUser(null);
+      setAuthLoading(false);
+    }
   };
 
-  // Studio Admin Authentication
+  // Studio Admin Authentication (for studio backend)
   const loginAdmin = (passcode) => {
     if (passcode === '2026' || passcode === 'ScreenArts@2026' || passcode.toLowerCase() === 'admin') {
       setAdminAuthenticated(true);
       return { success: true };
     }
-    return { success: false, error: 'Incorrect Studio Admin Passcode. Use 2026 or ScreenArts@2026' };
+    return { success: false, error: 'Incorrect Studio Admin Passcode.' };
   };
 
   const logoutAdmin = () => {
     setAdminAuthenticated(false);
-  };
-
-  // Supabase Social / OAuth Login (Google, GitHub, External Website)
-  const loginWithOAuth = async (provider = 'google') => {
-    setAuthLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: window.location.origin,
-        },
-      });
-      if (error) throw error;
-      return { success: true, data };
-    } catch (err) {
-      console.warn(`Supabase ${provider} OAuth notice:`, err.message);
-      // Demo fallback login for local preview
-      const demoUser = {
-        id: `user-${provider}-${Date.now()}`,
-        name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} Customer`,
-        email: `customer.${provider}@screenarts.in`,
-        role: 'customer',
-      };
-      setUser(demoUser);
-      setIsLoginModalOpen(false);
-      return { success: true, user: demoUser };
-    } finally {
-      setAuthLoading(false);
-    }
   };
 
   return (
@@ -247,12 +213,10 @@ export function AuthProvider({ children }) {
         adminAuthenticated,
         isLoginModalOpen,
         authLoading,
+        initializing,
         setIsLoginModalOpen,
-        loginWithEmailPassword,
-        registerWithEmail,
-        loginWithPhoneOtp,
-        loginWithOAuth,
-        loginUser,
+        sendOtp,
+        verifyOtp,
         logoutUser,
         loginAdmin,
         logoutAdmin,

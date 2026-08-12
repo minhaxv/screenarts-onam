@@ -138,6 +138,12 @@
   font-weight: 400;
 }
 
+.otp-code-input::placeholder {
+  letter-spacing: normal;
+  font-size: 14px;
+  font-weight: 400;
+}
+
 .auth-toggle-pwd {
   background: transparent;
   border: none;

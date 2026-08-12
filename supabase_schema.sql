@@ -115,7 +115,30 @@ CREATE POLICY "Public insert orders"
   ON public.orders FOR INSERT
   WITH CHECK (true);
 
+-- Enable RLS on Profiles table
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- Allow users to read their own profile record
+DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
+CREATE POLICY "Users can read own profile"
+  ON public.profiles FOR SELECT
+  USING (auth.uid() = id);
+
+-- Allow users to insert their own profile record
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+CREATE POLICY "Users can insert own profile"
+  ON public.profiles FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
+-- Allow users to update their own profile record
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile"
+  ON public.profiles FOR UPDATE
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+
 -- Grant privileges to anon, authenticated, and service_role
+GRANT ALL ON public.profiles TO anon, authenticated, service_role;
 GRANT ALL ON public.products TO anon, authenticated, service_role;
 GRANT ALL ON public.categories TO anon, authenticated, service_role;
 GRANT ALL ON public.orders TO anon, authenticated, service_role;

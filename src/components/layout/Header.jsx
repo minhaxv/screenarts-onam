@@ -64,7 +64,7 @@ export default function Header() {
           <Link to="/" className="header__logo">
             <span className="header__logo-screen">SCREEN</span>
             <span className="header__logo-arts">ARTS</span>
-            <span className="header__logo-badge">ONAM '26</span>
+            <span className="header__logo-badge">ONAM</span>
           </Link>
 
           <nav className="header__nav hide-mobile">
