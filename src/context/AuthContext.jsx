@@ -24,6 +24,24 @@ export function AuthProvider({ children }) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
 
+  // Helper to upsert user profile into Supabase public.profiles table
+  const syncUserProfileToDatabase = async (userId, email, fullName, phone) => {
+    try {
+      await supabase.from('profiles').upsert([
+        {
+          id: userId,
+          email,
+          full_name: fullName,
+          phone: phone || '',
+          role: 'customer',
+          updated_at: new Date().toISOString(),
+        },
+      ]);
+    } catch (err) {
+      console.warn('Supabase profiles table sync notice:', err.message);
+    }
+  };
+
   // Sync Supabase Auth State
   useEffect(() => {
     const syncSession = async () => {
@@ -38,6 +56,7 @@ export function AuthProvider({ children }) {
             role: 'customer',
           };
           setUser(supabaseUser);
+          syncUserProfileToDatabase(session.user.id, session.user.email, supabaseUser.name, supabaseUser.phone);
         }
       } catch (err) {
         console.error('Supabase session sync error', err);
@@ -56,6 +75,7 @@ export function AuthProvider({ children }) {
           role: 'customer',
         };
         setUser(supabaseUser);
+        syncUserProfileToDatabase(session.user.id, session.user.email, supabaseUser.name, supabaseUser.phone);
       } else if (_event === 'SIGNED_OUT') {
         setUser(null);
       }
@@ -87,9 +107,11 @@ export function AuthProvider({ children }) {
           id: data.user.id,
           email: data.user.email,
           name: data.user.user_metadata?.name || email.split('@')[0],
+          phone: data.user.user_metadata?.phone || '',
           role: 'customer',
         };
         setUser(loggedUser);
+        syncUserProfileToDatabase(loggedUser.id, loggedUser.email, loggedUser.name, loggedUser.phone);
         setIsLoginModalOpen(false);
         return { success: true, user: loggedUser };
       }
@@ -125,6 +147,7 @@ export function AuthProvider({ children }) {
           role: 'customer',
         };
         setUser(newUser);
+        syncUserProfileToDatabase(newUser.id, newUser.email, name, phone);
         setIsLoginModalOpen(false);
         return { success: true, user: newUser };
       }

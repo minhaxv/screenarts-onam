@@ -36,7 +36,21 @@ CREATE TABLE IF NOT EXISTS public.products (
 );
 
 -- ----------------------------------------------------------------------------
--- 2. CATEGORIES TABLE
+-- 2. PROFILES TABLE (Connected to Supabase Auth users)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  phone TEXT,
+  role TEXT DEFAULT 'customer',
+  avatar_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- 3. CATEGORIES TABLE
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.categories (
   id TEXT PRIMARY KEY,
