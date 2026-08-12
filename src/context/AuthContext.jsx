@@ -96,8 +96,8 @@ export function AuthProvider({ children }) {
     localStorage.setItem('screenarts_admin_auth', adminAuthenticated ? 'true' : 'false');
   }, [adminAuthenticated]);
 
-  // Unified Email OTP Flow - Step 1: Send real OTP code to Email
-  const sendOtp = async (email) => {
+  // Email OTP Flow - Step 1: Send real OTP code to Email
+  const sendOtp = async (email, metadata = {}) => {
     const cleanEmail = email?.trim().toLowerCase();
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return { success: false, error: 'Invalid email address' };
@@ -108,7 +108,12 @@ export function AuthProvider({ children }) {
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
-          shouldCreateUser: true, // Automatically creates user if new, logs in if existing
+          shouldCreateUser: true,
+          data: {
+            full_name: metadata.name || '',
+            name: metadata.name || '',
+            phone: metadata.phone || '',
+          },
         },
       });
 
@@ -131,8 +136,8 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Unified Email OTP Flow - Step 2: Verify OTP code
-  const verifyOtp = async (email, token) => {
+  // Email OTP Flow - Step 2: Verify OTP code
+  const verifyOtp = async (email, token, metadata = {}) => {
     const cleanEmail = email?.trim().toLowerCase();
     const cleanToken = token?.trim().replace(/\D/g, '');
 
@@ -166,7 +171,11 @@ export function AuthProvider({ children }) {
       }
 
       if (data?.user || data?.session?.user) {
-        const loggedUser = formatUserObject(data.user || data.session.user);
+        const targetUser = data.user || data.session.user;
+        const loggedUser = formatUserObject(targetUser);
+        if (metadata.name) loggedUser.name = metadata.name;
+        if (metadata.phone) loggedUser.phone = metadata.phone;
+
         setUser(loggedUser);
         await syncUserProfileToDatabase(loggedUser.id, loggedUser.email, loggedUser.name, loggedUser.phone);
         return { success: true, user: loggedUser };

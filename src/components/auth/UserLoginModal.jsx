@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Mail, ShieldCheck, LogOut, Package, ArrowLeft, RefreshCw, KeyRound, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Mail, User, Phone, ShieldCheck, LogOut, Package, ArrowLeft, RefreshCw, KeyRound, CheckCircle2, AlertCircle, Lock, UserPlus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import './UserLoginModal.css';
 
@@ -14,9 +14,15 @@ export default function UserLoginModal() {
     logoutUser,
   } = useAuth();
 
-  const [step, setStep] = useState('EMAIL'); // 'EMAIL' | 'OTP'
+  const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
+  const [step, setStep] = useState('FORM'); // 'FORM' | 'OTP'
+
+  // Form Fields
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -43,8 +49,10 @@ export default function UserLoginModal() {
   if (!isLoginModalOpen) return null;
 
   const resetForm = () => {
-    setStep('EMAIL');
+    setStep('FORM');
     setEmail('');
+    setName('');
+    setPhone('');
     setOtp('');
     setErrorMsg('');
     setSuccessMsg('');
@@ -57,7 +65,7 @@ export default function UserLoginModal() {
     resetForm();
   };
 
-  // Step 1: Send OTP to Email
+  // Step 1: Submit Login or Signup Form to Send OTP
   const handleSendEmail = async (e, isResend = false) => {
     if (e) e.preventDefault();
     setErrorMsg('');
@@ -65,14 +73,21 @@ export default function UserLoginModal() {
 
     const cleanEmail = email.trim();
     if (!cleanEmail) {
-      setErrorMsg('Invalid email address');
+      setErrorMsg('Please enter a valid email address');
       return;
     }
 
-    const res = await sendOtp(cleanEmail);
+    if (activeTab === 'register' && !isResend && !name.trim()) {
+      setErrorMsg('Please enter your full name');
+      return;
+    }
+
+    const metadata = activeTab === 'register' ? { name: name.trim(), phone: phone.trim() } : {};
+    const res = await sendOtp(cleanEmail, metadata);
+
     if (res.success) {
       setStep('OTP');
-      setSuccessMsg('Verification code sent to your email.');
+      setSuccessMsg(`Verification code sent to ${cleanEmail}`);
       setResendTimer(60);
       setCanResend(false);
     } else {
@@ -92,9 +107,11 @@ export default function UserLoginModal() {
       return;
     }
 
-    const res = await verifyOtp(email, cleanOtp);
+    const metadata = activeTab === 'register' ? { name: name.trim(), phone: phone.trim() } : {};
+    const res = await verifyOtp(email, cleanOtp, metadata);
+
     if (res.success) {
-      setSuccessMsg('Authentication successful! Welcome.');
+      setSuccessMsg(activeTab === 'register' ? 'Account created successfully!' : 'Signed in successfully!');
       setTimeout(() => {
         handleClose();
       }, 1200);
@@ -116,7 +133,7 @@ export default function UserLoginModal() {
         </button>
 
         {user ? (
-          /* LOGGED-IN DASHBOARD VIEW */
+          /* LOGGED-IN PROFILE VIEW */
           <div className="user-profile-card text-center py-2">
             <div className="user-avatar-badge">
               {user.name ? user.name.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : 'U')}
@@ -155,23 +172,57 @@ export default function UserLoginModal() {
             </div>
           </div>
         ) : (
-          /* UNIFIED PASSWORDLESS EMAIL OTP AUTHENTICATION */
+          /* LOGIN / SIGNUP AUTHENTICATION UI */
           <div className="login-modal-content">
-            {/* Header Pill & Title */}
-            <div className="text-center mb-5">
+            {/* Header Brand Pill & Title */}
+            <div className="text-center mb-4">
               <div className="brand-pill-header">
                 <span className="brand-sparkle">✨</span>
                 <span>SCREENARTS CALICUT</span>
               </div>
               <h3 className="heading-3 mt-2" style={{ fontSize: '20px', fontWeight: '800', margin: '8px 0 4px 0' }}>
-                {step === 'EMAIL' ? 'Email Authentication' : 'Enter Verification Code'}
+                {step === 'OTP'
+                  ? 'Enter Verification Code'
+                  : activeTab === 'login'
+                  ? 'Sign In to Account'
+                  : 'Create New Account'}
               </h3>
               <p className="text-xs text-muted" style={{ fontSize: '12px', color: '#64748B', margin: 0 }}>
-                {step === 'EMAIL'
-                  ? 'Enter your email to sign in or create an account automatically'
-                  : `Verification code sent to ${email}`}
+                {step === 'OTP'
+                  ? `Verification code sent to ${email}`
+                  : activeTab === 'login'
+                  ? 'Sign in using your registered email address'
+                  : 'Create your account to track orders & save designs'}
               </p>
             </div>
+
+            {/* Segmented Login / Sign Up Switcher Tabs (Shown on Form Step) */}
+            {step === 'FORM' && (
+              <div className="auth-tab-bar">
+                <button
+                  type="button"
+                  className={`auth-tab-btn ${activeTab === 'login' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('login');
+                    setErrorMsg('');
+                    setSuccessMsg('');
+                  }}
+                >
+                  <Lock size={14} /> Sign In
+                </button>
+                <button
+                  type="button"
+                  className={`auth-tab-btn ${activeTab === 'register' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('register');
+                    setErrorMsg('');
+                    setSuccessMsg('');
+                  }}
+                >
+                  <UserPlus size={14} /> Create Account
+                </button>
+              </div>
+            )}
 
             {/* Global Alerts */}
             {errorMsg && (
@@ -187,11 +238,52 @@ export default function UserLoginModal() {
               </div>
             )}
 
-            {/* STEP 1: EMAIL INPUT SCREEN */}
-            {step === 'EMAIL' && (
-              <form onSubmit={(e) => handleSendEmail(e)} className="auth-form flex flex-col gap-4">
+            {/* STEP 1: FORM STEP (SIGN IN OR SIGN UP) */}
+            {step === 'FORM' && (
+              <form onSubmit={(e) => handleSendEmail(e)} className="auth-form flex flex-col gap-3">
+                {/* Full Name Field for Registration */}
+                {activeTab === 'register' && (
+                  <div className="auth-field">
+                    <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>
+                      Full Name *
+                    </label>
+                    <div className="auth-input-wrap">
+                      <User size={18} className="auth-input-icon" />
+                      <input
+                        type="text"
+                        className="auth-input"
+                        required
+                        placeholder="e.g. Kavitha Unni"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Mobile Phone Field for Registration (Optional) */}
+                {activeTab === 'register' && (
+                  <div className="auth-field">
+                    <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>
+                      Mobile Number (Optional)
+                    </label>
+                    <div className="auth-input-wrap">
+                      <Phone size={18} className="auth-input-icon" />
+                      <input
+                        type="tel"
+                        className="auth-input"
+                        placeholder="+91 94473 XXXXX"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Email Address Field (Required for both Sign In & Sign Up) */}
                 <div className="auth-field">
-                  <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '6px', display: 'block' }}>
+                  <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>
                     Email Address *
                   </label>
                   <div className="auth-input-wrap">
@@ -203,7 +295,7 @@ export default function UserLoginModal() {
                       placeholder="name@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      autoFocus
+                      autoFocus={activeTab === 'login'}
                     />
                   </div>
                 </div>
@@ -211,15 +303,19 @@ export default function UserLoginModal() {
                 <button
                   type="submit"
                   className="btn btn-primary btn-md w-full mt-2"
-                  style={{ width: '100%', marginTop: '12px' }}
+                  style={{ width: '100%', marginTop: '10px' }}
                   disabled={authLoading}
                 >
-                  {authLoading ? 'Sending OTP Code...' : 'Continue with Email'}
+                  {authLoading
+                    ? 'Sending Verification Code...'
+                    : activeTab === 'login'
+                    ? 'Sign In with Email Code'
+                    : 'Create Account & Send Code'}
                 </button>
               </form>
             )}
 
-            {/* STEP 2: 6-DIGIT OTP CODE VERIFICATION SCREEN */}
+            {/* STEP 2: 6-DIGIT OTP VERIFICATION SCREEN */}
             {step === 'OTP' && (
               <form onSubmit={handleVerifyOtp} className="auth-form flex flex-col gap-4">
                 {/* Active Target Email Badge */}
@@ -247,12 +343,12 @@ export default function UserLoginModal() {
                     className="text-xs text-gold font-bold hover:underline flex items-center gap-1"
                     style={{ fontSize: '11px', color: '#D4A843', fontWeight: '700', border: 'none', background: 'transparent', cursor: 'pointer' }}
                     onClick={() => {
-                      setStep('EMAIL');
+                      setStep('FORM');
                       setErrorMsg('');
                       setSuccessMsg('');
                     }}
                   >
-                    <ArrowLeft size={12} /> Change
+                    <ArrowLeft size={12} /> Edit Details
                   </button>
                 </div>
 
@@ -282,14 +378,14 @@ export default function UserLoginModal() {
                 <button
                   type="submit"
                   className="btn btn-primary btn-md w-full mt-2"
-                  style={{ width: '100%', marginTop: '12px' }}
+                  style={{ width: '100%', marginTop: '10px' }}
                   disabled={authLoading || otp.length < 6}
                 >
-                  {authLoading ? 'Verifying Code...' : 'Verify & Continue'}
+                  {authLoading ? 'Verifying Code...' : 'Verify & Complete'}
                 </button>
 
                 {/* Resend OTP Section */}
-                <div className="text-center mt-3" style={{ textAlign: 'center', marginTop: '12px' }}>
+                <div className="text-center mt-3" style={{ textAlign: 'center', marginTop: '10px' }}>
                   {canResend ? (
                     <button
                       type="button"
@@ -298,7 +394,7 @@ export default function UserLoginModal() {
                       onClick={(e) => handleSendEmail(e, true)}
                       disabled={authLoading}
                     >
-                      <RefreshCw size={14} className={authLoading ? 'animate-spin' : ''} /> Resend Code
+                      <RefreshCw size={14} className={authLoading ? 'animate-spin' : ''} /> Resend Verification Code
                     </button>
                   ) : (
                     <span className="text-xs text-muted" style={{ fontSize: '12px', color: '#94A3B8' }}>
@@ -311,7 +407,7 @@ export default function UserLoginModal() {
 
             {/* Footer Notice */}
             <div className="auth-footer-notice">
-              <span>Secured by <strong>Supabase Email OTP Authentication</strong></span>
+              <span>Secured by <strong>Supabase Email Authentication</strong> • Calicut Studio</span>
             </div>
           </div>
         )}
