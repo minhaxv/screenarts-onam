@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, CreditCard, Smartphone, Banknote, CheckCircle, ArrowLeft, Truck, Store, Wrench, Printer, Palette, Eye } from 'lucide-react';
+import { MapPin, CreditCard, Smartphone, Banknote, CheckCircle, ArrowLeft, Truck, Store, Wrench, Printer, Palette, Eye, AlertCircle, RefreshCw } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -16,6 +16,7 @@ export default function CheckoutPage() {
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedOrderNumber, setPlacedOrderNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [form, setForm] = useState({
     name: user?.name || '',
     mobile: user?.phone || '',
@@ -45,51 +46,98 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    console.log('==================================================');
+    console.log('1. PLACE_ORDER_CLICKED');
 
-    if (!user) {
-      setErrorMsg('Please sign in or register to complete your order placement.');
+    // 2. AUTHENTICATION CHECK
+    console.log('2. AUTH_USER');
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    const activeUser = authData?.user || (user?.id ? user : null);
+
+    if (authError) {
+      console.error('AUTH_USER_ERROR:', {
+        error: authError,
+        message: authError.message,
+        code: authError.code || authError.status,
+        details: authError.details || null,
+        hint: authError.hint || null,
+        status: authError.status || 401
+      });
+    }
+
+    if (!activeUser || !activeUser.id) {
+      console.warn('AUTH_USER_FAILED: No active authenticated user session', { authData, authError, contextUser: user });
+      setErrorMsg('Please log in before placing your order.');
       setIsLoginModalOpen(true);
       return;
     }
 
     if (!form.name || !form.mobile || (delivery === 'home' && (!form.address || !form.pincode))) {
+      console.warn('FORM_VALIDATION_STOPPED: Shipping details incomplete', form);
       setErrorMsg('Please complete all required shipping & contact fields.');
       return;
     }
 
-    if (items.length === 0) return;
+    // 3. CART CHECK
+    console.log('3. CART_ITEMS', { itemsCount: items?.length, items });
+    if (!items || items.length === 0) {
+      console.warn('CART_ITEMS_EMPTY: Cart is empty');
+      setErrorMsg('Your cart is empty.');
+      return;
+    }
 
     setIsSubmitting(true);
     const orderNum = `ORD-${Math.floor(80000 + Math.random() * 10000)}`;
 
     try {
-      // 1. Fetch current product prices directly from Supabase for security validation
-      const productIds = items.map(i => i.id || i._id).filter(Boolean);
-      const { data: dbProducts } = await supabase
+      // 4. PRODUCT VALIDATION
+      console.log('4. PRODUCT_VALIDATION');
+      const productIds = items.map(i => i.id || i.productId || i._id).filter(Boolean);
+      
+      const { data: dbProducts, error: prodErr } = await supabase
         .from('products')
-        .select('id, price, name')
+        .select('id, price, name, is_active')
         .in('id', productIds);
 
-      const priceMap = new Map();
-      if (Array.isArray(dbProducts)) {
-        dbProducts.forEach(p => priceMap.set(p.id, Number(p.price)));
+      if (prodErr) {
+        console.error('PRODUCT_VALIDATION_ERROR:', {
+          error: prodErr,
+          message: prodErr.message,
+          code: prodErr.code,
+          details: prodErr.details,
+          hint: prodErr.hint,
+          status: prodErr.status
+        });
+        setErrorMsg(`Unable to verify product details from database: ${prodErr.message}`);
+        setIsSubmitting(false);
+        return;
       }
 
-      // Re-calculate validated items and total
+      const priceMap = new Map();
+      const activeMap = new Map();
+      if (Array.isArray(dbProducts)) {
+        dbProducts.forEach(p => {
+          priceMap.set(p.id, Number(p.price));
+          activeMap.set(p.id, p.is_active !== false);
+        });
+      }
+
+      // Re-calculate validated items from DB prices
       const validatedItems = items.map(item => {
-        const validatedUnitPrice = priceMap.has(item.id) ? priceMap.get(item.id) : Number(item.price || 0);
+        const itemPId = item.id || item.productId || item._id;
+        const validatedUnitPrice = priceMap.has(itemPId) ? priceMap.get(itemPId) : Number(item.price || 0);
         return {
-          productId: item.id || item._id,
+          productId: itemPId,
           name: item.name,
-          colour: item.selectedOptions?.colour || 'White',
-          size: item.selectedOptions?.size || 'M',
-          printLocation: item.selectedOptions?.printLocation || 'Front Center',
-          printRatio: item.selectedOptions?.printRatio || '4:5',
+          colour: item.selectedOptions?.colour || item.colour || 'White',
+          size: item.selectedOptions?.size || item.size || 'M',
+          printLocation: item.selectedOptions?.printLocation || item.printLocation || 'Front Center',
+          printRatio: item.selectedOptions?.printRatio || item.printRatio || '4:5',
           quantity: Number(item.quantity || 1),
           price: validatedUnitPrice,
-          customText: item.selectedOptions?.customText || '',
-          customDesignName: item.selectedOptions?.customDesign || '',
-          customDesignUrl: item.selectedOptions?.customDesignUrl || '',
+          customText: item.selectedOptions?.customText || item.customText || '',
+          customDesignName: item.selectedOptions?.customDesign || item.customDesign || '',
+          customDesignUrl: item.selectedOptions?.customDesignUrl || item.customDesignUrl || '',
         };
       });
 
@@ -97,15 +145,22 @@ export default function CheckoutPage() {
       const validatedDeliveryFee = delivery === 'home' ? (validatedSubtotal >= 999 ? 0 : 79) : 0;
       const validatedTotal = validatedSubtotal + validatedDeliveryFee + workflowFee;
 
-      // 2. Insert Header Record into Supabase `orders` table
+      if (isNaN(validatedSubtotal) || isNaN(validatedDeliveryFee) || isNaN(validatedTotal) || validatedTotal <= 0) {
+        console.error('PRICE_CALCULATION_INVALID:', { validatedSubtotal, validatedDeliveryFee, validatedTotal });
+        setErrorMsg('Invalid price calculation detected. Please refresh your cart and try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 5. ORDER PAYLOAD PREPARATION (Matches exact Supabase public.orders schema)
       const orderPayload = {
         order_number: orderNum,
-        user_id: user?.id || null,
+        user_id: activeUser.id,
         customer_name: form.name.trim(),
         phone: form.mobile.trim(),
-        email: form.email?.trim() || user?.email || '',
+        email: form.email?.trim() || activeUser.email || '',
         items: validatedItems,
-        total_amount: validatedTotal,
+        total_amount: Number(validatedTotal),
         delivery_method: delivery,
         delivery_address: delivery === 'home' ? form.address.trim() : 'ScreenArts Calicut Studio Pickup',
         pincode: delivery === 'home' ? form.pincode.trim() : '673001',
@@ -118,42 +173,103 @@ export default function CheckoutPage() {
         },
         created_at: new Date().toISOString(),
       };
+      console.log('5. ORDER_PAYLOAD', orderPayload);
 
-      const { data: createdOrder, error: orderError } = await supabase
+      // 6. ORDERS INSERT
+      console.log('6. ORDERS_INSERT');
+      const orderInsertResult = await supabase
         .from('orders')
         .insert([orderPayload])
-        .select('id, order_number')
+        .select()
         .single();
 
-      if (orderError) {
-        console.error('Database Order Insertion Error:', orderError.message);
-        setErrorMsg(orderError.message || 'Unable to place order in database. Please try again.');
+      // 7. ORDER INSERT RESULT
+      console.log('7. ORDER_INSERT_RESULT', {
+        data: orderInsertResult.data,
+        error: orderInsertResult.error,
+        message: orderInsertResult.error?.message,
+        code: orderInsertResult.error?.code,
+        details: orderInsertResult.error?.details,
+        hint: orderInsertResult.error?.hint,
+        status: orderInsertResult.status,
+        statusText: orderInsertResult.statusText
+      });
+
+      if (orderInsertResult.error) {
+        console.error('ORDERS_INSERT_FAILED:', {
+          error: orderInsertResult.error,
+          message: orderInsertResult.error.message,
+          code: orderInsertResult.error.code,
+          details: orderInsertResult.error.details,
+          hint: orderInsertResult.error.hint,
+          status: orderInsertResult.status
+        });
+        setErrorMsg(`Unable to place order. Database Error [${orderInsertResult.error.code || orderInsertResult.status}]: ${orderInsertResult.error.message}`);
         setIsSubmitting(false);
         return;
       }
 
-      // 3. Insert Detail Records into Supabase `order_items` table (safely catch if table schema is pending)
-      try {
-        const parentOrderId = String(createdOrder?.id || orderNum);
-        const orderItemsPayload = validatedItems.map(it => ({
-          order_id: parentOrderId,
-          product_id: it.productId || null,
-          product_name: it.name,
-          size: it.size,
-          colour: it.colour,
-          quantity: it.quantity,
-          unit_price: it.price,
-          print_position: it.printLocation,
-          custom_design_url: it.customDesignUrl || null,
-        }));
-        await supabase.from('order_items').insert(orderItemsPayload);
-      } catch (err) {
-        console.warn('Notice inserting detail order_items:', err.message);
+      const createdOrder = orderInsertResult.data;
+      const parentOrderId = String(createdOrder?.id || orderNum);
+      
+      // 8. ORDER ID
+      console.log('8. ORDER_ID', parentOrderId);
+
+      // 9. ORDER ITEMS INSERT
+      console.log('9. ORDER_ITEMS_INSERT');
+      const orderItemsPayload = validatedItems.map(it => ({
+        order_id: parentOrderId,
+        product_id: it.productId || null,
+        product_name: it.name,
+        size: it.size,
+        colour: it.colour,
+        quantity: it.quantity,
+        unit_price: it.price,
+        print_position: it.printLocation,
+        custom_design_url: it.customDesignUrl || null,
+      }));
+
+      const orderItemsResult = await supabase
+        .from('order_items')
+        .insert(orderItemsPayload)
+        .select();
+
+      // 10. ORDER ITEMS RESULT
+      console.log('10. ORDER_ITEMS_RESULT', {
+        data: orderItemsResult.data,
+        error: orderItemsResult.error,
+        message: orderItemsResult.error?.message,
+        code: orderItemsResult.error?.code,
+        details: orderItemsResult.error?.details,
+        hint: orderItemsResult.error?.hint,
+        status: orderItemsResult.status,
+        statusText: orderItemsResult.statusText
+      });
+
+      if (orderItemsResult.error) {
+        console.error('ORDER_ITEMS_INSERT_FAILED:', {
+          error: orderItemsResult.error,
+          message: orderItemsResult.error.message,
+          code: orderItemsResult.error.code,
+          details: orderItemsResult.error.details,
+          hint: orderItemsResult.error.hint,
+          status: orderItemsResult.status
+        });
+        // Clean up orphaned header order if order_items failed
+        await supabase.from('orders').delete().eq('id', parentOrderId);
+        setErrorMsg(`Unable to save order detail items [${orderItemsResult.error.code || orderItemsResult.status}]: ${orderItemsResult.error.message}`);
+        setIsSubmitting(false);
+        return;
       }
 
+      // 11. CART CLEAR
+      console.log('11. CART_CLEAR');
+      clearCart();
+
+      // 12. REDIRECT
+      console.log('12. REDIRECT');
       setPlacedOrderNumber(orderNum);
       setOrderPlaced(true);
-      clearCart();
     } catch (err) {
       console.error('Order creation exception:', err);
       setErrorMsg(err.message || 'Failed to complete order. Please check your connection.');
@@ -204,6 +320,16 @@ export default function CheckoutPage() {
         </Link>
 
         <h1 className="heading-2 mt-4">Checkout & Service Selection</h1>
+
+        {errorMsg && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-300 text-red-700 rounded-2xl flex items-center gap-3 font-semibold text-sm shadow-sm">
+            <AlertCircle size={24} className="text-red-500 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-bold">Checkout Interrupted</p>
+              <p className="text-xs font-normal mt-0.5">{errorMsg}</p>
+            </div>
+          </div>
+        )}
 
         <form className="checkout-layout" onSubmit={handlePlaceOrder}>
           {/* Left: Form */}
@@ -381,8 +507,14 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary btn-lg mt-6" style={{ width: '100%' }}>
-                Place Order ({formatPrice(finalTotal)})
+              <button type="submit" className="btn btn-primary btn-lg mt-6" style={{ width: '100%' }} disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <RefreshCw size={18} className="animate-spin" /> Processing Order...
+                  </span>
+                ) : (
+                  `Place Order (${formatPrice(finalTotal)})`
+                )}
               </button>
             </div>
           </div>
