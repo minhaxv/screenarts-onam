@@ -259,7 +259,7 @@ export function AuthProvider({ children }) {
 
     setAuthLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
+      let { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password: password,
         options: {
@@ -272,6 +272,24 @@ export function AuthProvider({ children }) {
         },
       });
 
+      // Smart Fallback: If Supabase returns URL path configuration error, retry without explicit emailRedirectTo
+      if (error && (error.message?.toLowerCase().includes('path') || error.message?.toLowerCase().includes('redirect') || error.message?.toLowerCase().includes('url'))) {
+        console.warn('Retrying signUp without custom redirectUrl fallback...');
+        const retryRes = await supabase.auth.signUp({
+          email: cleanEmail,
+          password: password,
+          options: {
+            data: {
+              full_name: name.trim(),
+              name: name.trim(),
+              phone: phone.trim(),
+            },
+          },
+        });
+        data = retryRes.data;
+        error = retryRes.error;
+      }
+
       if (error) {
         return { success: false, error: error.message || 'Account creation failed.' };
       }
@@ -280,7 +298,7 @@ export function AuthProvider({ children }) {
         const loggedUser = formatUserObject(data.user);
         setUser(loggedUser);
         await syncUserProfileToDatabase(data.user.id, cleanEmail, name.trim(), phone.trim());
-        return { success: true, user: loggedUser, message: 'Account created successfully! Check your email to confirm.' };
+        return { success: true, user: loggedUser, message: 'Account created successfully!' };
       }
 
       return { success: true, message: 'Account created! Please check your email for confirmation.' };
@@ -302,9 +320,14 @@ export function AuthProvider({ children }) {
 
     setAuthLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      let { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
         redirectTo: redirectUrl,
       });
+
+      if (error && (error.message?.toLowerCase().includes('path') || error.message?.toLowerCase().includes('redirect') || error.message?.toLowerCase().includes('url'))) {
+        const retryRes = await supabase.auth.resetPasswordForEmail(cleanEmail);
+        error = retryRes.error;
+      }
 
       if (error) {
         return { success: false, error: 'Unable to send password reset email.' };
@@ -329,7 +352,7 @@ export function AuthProvider({ children }) {
 
     setAuthLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      let { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
           emailRedirectTo: redirectUrl,
@@ -341,6 +364,21 @@ export function AuthProvider({ children }) {
           },
         },
       });
+
+      if (error && (error.message?.toLowerCase().includes('path') || error.message?.toLowerCase().includes('redirect') || error.message?.toLowerCase().includes('url'))) {
+        const retryRes = await supabase.auth.signInWithOtp({
+          email: cleanEmail,
+          options: {
+            shouldCreateUser: true,
+            data: {
+              full_name: metadata.name || '',
+              name: metadata.name || '',
+              phone: metadata.phone || '',
+            },
+          },
+        });
+        error = retryRes.error;
+      }
 
       if (error) {
         return { success: false, error: 'Unable to send verification code.' };
