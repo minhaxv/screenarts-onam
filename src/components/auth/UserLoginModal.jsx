@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Mail, User, Phone, ShieldCheck, LogOut, Package, ArrowLeft, RefreshCw, KeyRound, CheckCircle2, AlertCircle, Lock, UserPlus } from 'lucide-react';
+import { X, Mail, User, Phone, ShieldCheck, LogOut, Package, ArrowLeft, RefreshCw, KeyRound, CheckCircle2, AlertCircle, Lock, UserPlus, Smartphone } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import './UserLoginModal.css';
 
@@ -9,16 +9,26 @@ export default function UserLoginModal() {
     setIsLoginModalOpen,
     user,
     authLoading,
-    sendOtp,
-    verifyOtp,
+    sendPhoneOtp,
+    verifyPhoneOtp,
+    loginWithEmail,
+    signUpWithEmail,
+    resetPassword,
     logoutUser,
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
+  const [authMode, setAuthMode] = useState('MOBILE'); // 'MOBILE' | 'EMAIL'
+  const [emailSubTab, setEmailSubTab] = useState('LOGIN'); // 'LOGIN' | 'SIGNUP' | 'FORGOT'
   const [step, setStep] = useState('FORM'); // 'FORM' | 'OTP'
 
-  // Form Fields
+  // Mobile Fields
+  const [mobileNum, setMobileNum] = useState('');
+  const [activeFormattedPhone, setActiveFormattedPhone] = useState('');
+
+  // Email & Account Fields
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
@@ -50,7 +60,13 @@ export default function UserLoginModal() {
 
   const resetForm = () => {
     setStep('FORM');
+    setAuthMode('MOBILE');
+    setEmailSubTab('LOGIN');
+    setMobileNum('');
+    setActiveFormattedPhone('');
     setEmail('');
+    setPassword('');
+    setConfirmPassword('');
     setName('');
     setPhone('');
     setOtp('');
@@ -65,58 +81,97 @@ export default function UserLoginModal() {
     resetForm();
   };
 
-  // Step 1: Submit Login or Signup Form to Send OTP
-  const handleSendEmail = async (e, isResend = false) => {
+  // 1. MOBILE PHONE OTP — Send SMS OTP
+  const handleSendMobileOtp = async (e, isResend = false) => {
     if (e) e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
-    const cleanEmail = email.trim();
-    if (!cleanEmail) {
-      setErrorMsg('Please enter a valid email address');
-      return;
-    }
-
-    if (activeTab === 'register' && !isResend && !name.trim()) {
-      setErrorMsg('Please enter your full name');
-      return;
-    }
-
-    const metadata = activeTab === 'register' ? { name: name.trim(), phone: phone.trim() } : {};
-    const res = await sendOtp(cleanEmail, metadata);
-
+    const res = await sendPhoneOtp(mobileNum);
     if (res.success) {
+      setActiveFormattedPhone(res.formattedPhone);
       setStep('OTP');
-      setSuccessMsg(`Verification code sent to ${cleanEmail}`);
+      setSuccessMsg(res.message);
       setResendTimer(60);
       setCanResend(false);
     } else {
-      setErrorMsg(res.error || 'Failed to send verification code');
+      setErrorMsg(res.error);
     }
   };
 
-  // Step 2: Verify 6-digit OTP Code
-  const handleVerifyOtp = async (e) => {
+  // 2. MOBILE PHONE OTP — Verify SMS OTP
+  const handleVerifyMobileOtp = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
     const cleanOtp = otp.trim().replace(/\D/g, '');
     if (cleanOtp.length < 6) {
-      setErrorMsg('Invalid verification code');
+      setErrorMsg('Incorrect OTP.');
       return;
     }
 
-    const metadata = activeTab === 'register' ? { name: name.trim(), phone: phone.trim() } : {};
-    const res = await verifyOtp(email, cleanOtp, metadata);
-
+    const res = await verifyPhoneOtp(activeFormattedPhone || mobileNum, cleanOtp);
     if (res.success) {
-      setSuccessMsg(activeTab === 'register' ? 'Account created successfully!' : 'Signed in successfully!');
+      setSuccessMsg('Logged in successfully!');
+      setTimeout(() => {
+        handleClose();
+      }, 1000);
+    } else {
+      setErrorMsg(res.error);
+    }
+  };
+
+  // 3. EMAIL — Login with Email & Password
+  const handleEmailLogin = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const res = await loginWithEmail(email, password);
+    if (res.success) {
+      setSuccessMsg('Signed in successfully!');
+      setTimeout(() => {
+        handleClose();
+      }, 1000);
+    } else {
+      setErrorMsg(res.error);
+    }
+  };
+
+  // 4. EMAIL — Create Account
+  const handleEmailSignUp = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    if (password !== confirmPassword) {
+      setErrorMsg('Passwords do not match.');
+      return;
+    }
+
+    const res = await signUpWithEmail(email, password, name, phone);
+    if (res.success) {
+      setSuccessMsg(res.message || 'Account created successfully!');
       setTimeout(() => {
         handleClose();
       }, 1200);
     } else {
-      setErrorMsg(res.error || 'Invalid verification code');
+      setErrorMsg(res.error);
+    }
+  };
+
+  // 5. EMAIL — Forgot Password Reset
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const res = await resetPassword(email);
+    if (res.success) {
+      setSuccessMsg(res.message);
+    } else {
+      setErrorMsg(res.error);
     }
   };
 
@@ -124,11 +179,7 @@ export default function UserLoginModal() {
     <div className="login-modal-overlay" onClick={handleClose}>
       <div className="login-modal-card page-enter" onClick={(e) => e.stopPropagation()}>
         {/* Close Button */}
-        <button
-          className="login-modal-close"
-          onClick={handleClose}
-          title="Close Modal"
-        >
+        <button className="login-modal-close" onClick={handleClose} title="Close Modal">
           <X size={18} />
         </button>
 
@@ -142,26 +193,26 @@ export default function UserLoginModal() {
               <ShieldCheck size={14} /> SUPABASE VERIFIED USER
             </div>
             <h3 className="heading-3 mt-1" style={{ fontSize: '18px', fontWeight: '800' }}>{user.name || 'Customer'}</h3>
-            <p className="text-xs text-muted mb-6">{user.email}</p>
+            <p className="text-xs text-muted mb-4">{user.email || user.phone}</p>
 
-            <div className="flex flex-col gap-3" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="flex flex-col gap-2" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <a
-                href="/orders"
+                href="/account"
                 className="btn btn-primary btn-md w-full flex items-center justify-center gap-2"
                 onClick={handleClose}
               >
-                <Package size={18} /> View My Orders & Delivery Status
+                <User size={18} /> My Account Dashboard
               </a>
               <a
-                href="/customize"
+                href="/orders"
                 className="btn btn-outline btn-md w-full flex items-center justify-center gap-2"
                 onClick={handleClose}
               >
-                🎨 Create Custom Onam T-Shirt
+                <Package size={18} /> View Orders & Delivery Status
               </a>
               <button
                 className="btn btn-ghost btn-sm text-red mt-2 flex items-center justify-center gap-1"
-                style={{ color: '#DC2626', border: 'none', background: 'transparent', cursor: 'pointer', marginTop: '8px' }}
+                style={{ color: '#DC2626', border: 'none', background: 'transparent', cursor: 'pointer', marginTop: '6px' }}
                 onClick={() => {
                   logoutUser();
                   handleClose();
@@ -182,120 +233,90 @@ export default function UserLoginModal() {
               </div>
               <h3 className="heading-3 mt-2" style={{ fontSize: '20px', fontWeight: '800', margin: '8px 0 4px 0' }}>
                 {step === 'OTP'
-                  ? 'Enter Verification Code'
-                  : activeTab === 'login'
-                  ? 'Sign In to Account'
-                  : 'Create New Account'}
+                  ? 'Verify Mobile OTP'
+                  : authMode === 'MOBILE'
+                  ? 'Mobile Phone Login'
+                  : emailSubTab === 'LOGIN'
+                  ? 'Email Sign In'
+                  : emailSubTab === 'SIGNUP'
+                  ? 'Create New Account'
+                  : 'Reset Password'}
               </h3>
               <p className="text-xs text-muted" style={{ fontSize: '12px', color: '#64748B', margin: 0 }}>
                 {step === 'OTP'
-                  ? `Verification code sent to ${email}`
-                  : activeTab === 'login'
-                  ? 'Sign in using your registered email address'
-                  : 'Create your account to track orders & save designs'}
+                  ? `SMS code sent to ${activeFormattedPhone || mobileNum}`
+                  : authMode === 'MOBILE'
+                  ? 'Sign in or create account using your 10-digit mobile number'
+                  : emailSubTab === 'LOGIN'
+                  ? 'Sign in with your registered email & password'
+                  : emailSubTab === 'SIGNUP'
+                  ? 'Create your customer account to manage orders'
+                  : 'Enter your email to receive a password reset link'}
               </p>
             </div>
 
-            {/* Segmented Login / Sign Up Switcher Tabs (Shown on Form Step) */}
+            {/* Top Selector: Mobile Number vs Email */}
             {step === 'FORM' && (
-              <div className="auth-tab-bar">
+              <div className="auth-tab-bar mb-4">
                 <button
                   type="button"
-                  className={`auth-tab-btn ${activeTab === 'login' ? 'active' : ''}`}
+                  className={`auth-tab-btn ${authMode === 'MOBILE' ? 'active' : ''}`}
                   onClick={() => {
-                    setActiveTab('login');
+                    setAuthMode('MOBILE');
                     setErrorMsg('');
                     setSuccessMsg('');
                   }}
                 >
-                  <Lock size={14} /> Sign In
+                  <Smartphone size={14} /> Mobile Number
                 </button>
                 <button
                   type="button"
-                  className={`auth-tab-btn ${activeTab === 'register' ? 'active' : ''}`}
+                  className={`auth-tab-btn ${authMode === 'EMAIL' ? 'active' : ''}`}
                   onClick={() => {
-                    setActiveTab('register');
+                    setAuthMode('EMAIL');
                     setErrorMsg('');
                     setSuccessMsg('');
                   }}
                 >
-                  <UserPlus size={14} /> Create Account
+                  <Mail size={14} /> Email
                 </button>
               </div>
             )}
 
             {/* Global Alerts */}
             {errorMsg && (
-              <div className="auth-alert alert-error">
+              <div className="auth-alert alert-error mb-3">
                 <AlertCircle size={16} />
                 <span>{errorMsg}</span>
               </div>
             )}
             {successMsg && (
-              <div className="auth-alert alert-success">
+              <div className="auth-alert alert-success mb-3">
                 <CheckCircle2 size={16} />
                 <span>{successMsg}</span>
               </div>
             )}
 
-            {/* STEP 1: FORM STEP (SIGN IN OR SIGN UP) */}
-            {step === 'FORM' && (
-              <form onSubmit={(e) => handleSendEmail(e)} className="auth-form flex flex-col gap-3">
-                {/* Full Name Field for Registration */}
-                {activeTab === 'register' && (
-                  <div className="auth-field">
-                    <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>
-                      Full Name *
-                    </label>
-                    <div className="auth-input-wrap">
-                      <User size={18} className="auth-input-icon" />
-                      <input
-                        type="text"
-                        className="auth-input"
-                        required
-                        placeholder="e.g. Kavitha Unni"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Mobile Phone Field for Registration (Optional) */}
-                {activeTab === 'register' && (
-                  <div className="auth-field">
-                    <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>
-                      Mobile Number (Optional)
-                    </label>
-                    <div className="auth-input-wrap">
-                      <Phone size={18} className="auth-input-icon" />
-                      <input
-                        type="tel"
-                        className="auth-input"
-                        placeholder="+91 94473 XXXXX"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Email Address Field (Required for both Sign In & Sign Up) */}
+            {/* ════════════ 1. MOBILE NUMBER MODE ════════════ */}
+            {authMode === 'MOBILE' && step === 'FORM' && (
+              <form onSubmit={handleSendMobileOtp} className="auth-form flex flex-col gap-3">
                 <div className="auth-field">
                   <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>
-                    Email Address *
+                    Mobile Number *
                   </label>
-                  <div className="auth-input-wrap">
-                    <Mail size={18} className="auth-input-icon" />
+                  <div className="auth-input-wrap flex items-center">
+                    <span className="px-3 py-2 bg-cream font-bold text-sm text-charcoal border-r" style={{ padding: '0 12px', fontWeight: '700', color: '#1A1A2E' }}>
+                      +91
+                    </span>
                     <input
-                      type="email"
+                      type="tel"
                       className="auth-input"
                       required
-                      placeholder="name@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      autoFocus={activeTab === 'login'}
+                      maxLength={10}
+                      placeholder="10-digit mobile number"
+                      value={mobileNum}
+                      onChange={(e) => setMobileNum(e.target.value.replace(/\D/g, ''))}
+                      autoFocus
                     />
                   </div>
                 </div>
@@ -303,59 +324,40 @@ export default function UserLoginModal() {
                 <button
                   type="submit"
                   className="btn btn-primary btn-md w-full mt-2"
-                  style={{ width: '100%', marginTop: '10px' }}
-                  disabled={authLoading}
+                  disabled={authLoading || mobileNum.length < 10}
                 >
-                  {authLoading
-                    ? 'Sending Verification Code...'
-                    : activeTab === 'login'
-                    ? 'Sign In with Email Code'
-                    : 'Create Account & Send Code'}
+                  {authLoading ? 'Sending OTP...' : 'Send SMS OTP'}
                 </button>
               </form>
             )}
 
-            {/* STEP 2: 6-DIGIT OTP VERIFICATION SCREEN */}
-            {step === 'OTP' && (
-              <form onSubmit={handleVerifyOtp} className="auth-form flex flex-col gap-4">
-                {/* Active Target Email Badge */}
-                <div
-                  className="p-3 bg-cream rounded-xl border flex items-center justify-between"
-                  style={{
-                    padding: '10px 14px',
-                    backgroundColor: '#FAF7F2',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '14px',
-                  }}
-                >
-                  <div className="flex items-center gap-2 overflow-hidden" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Mail size={16} style={{ color: '#D4A843', flexShrink: 0 }} />
-                    <span className="text-xs font-bold text-charcoal truncate" style={{ fontSize: '13px', fontWeight: '700', color: '#1A1A2E' }}>
-                      {email}
+            {/* MOBILE OTP VERIFICATION SCREEN */}
+            {authMode === 'MOBILE' && step === 'OTP' && (
+              <form onSubmit={handleVerifyMobileOtp} className="auth-form flex flex-col gap-4">
+                <div className="p-3 bg-cream rounded-xl border flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Smartphone size={16} style={{ color: '#D4A843' }} />
+                    <span className="text-xs font-bold text-charcoal">
+                      {activeFormattedPhone || mobileNum}
                     </span>
                   </div>
                   <button
                     type="button"
                     className="text-xs text-gold font-bold hover:underline flex items-center gap-1"
-                    style={{ fontSize: '11px', color: '#D4A843', fontWeight: '700', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                    style={{ fontSize: '11px', color: '#D4A843', border: 'none', background: 'transparent', cursor: 'pointer' }}
                     onClick={() => {
                       setStep('FORM');
                       setErrorMsg('');
                       setSuccessMsg('');
                     }}
                   >
-                    <ArrowLeft size={12} /> Edit Details
+                    <ArrowLeft size={12} /> Change Number
                   </button>
                 </div>
 
-                {/* 6-Digit Code Input */}
                 <div className="auth-field">
                   <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '6px', display: 'block' }}>
-                    Verification Code (OTP) *
+                    6-Digit SMS OTP *
                   </label>
                   <div className="auth-input-wrap">
                     <KeyRound size={18} className="auth-input-icon" />
@@ -377,37 +379,230 @@ export default function UserLoginModal() {
 
                 <button
                   type="submit"
-                  className="btn btn-primary btn-md w-full mt-2"
-                  style={{ width: '100%', marginTop: '10px' }}
+                  className="btn btn-primary btn-md w-full"
                   disabled={authLoading || otp.length < 6}
                 >
-                  {authLoading ? 'Verifying Code...' : 'Verify & Complete'}
+                  {authLoading ? 'Verifying...' : 'Verify & Continue'}
                 </button>
 
-                {/* Resend OTP Section */}
-                <div className="text-center mt-3" style={{ textAlign: 'center', marginTop: '10px' }}>
+                <div className="text-center mt-2">
                   {canResend ? (
                     <button
                       type="button"
-                      className="text-xs text-gold font-bold hover:underline inline-flex items-center gap-1"
-                      style={{ fontSize: '12px', color: '#D4A843', fontWeight: '700', border: 'none', background: 'transparent', cursor: 'pointer' }}
-                      onClick={(e) => handleSendEmail(e, true)}
+                      className="text-xs text-gold font-bold hover:underline flex items-center justify-center gap-1 mx-auto"
+                      style={{ fontSize: '12px', color: '#D4A843', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                      onClick={(e) => handleSendMobileOtp(e, true)}
                       disabled={authLoading}
                     >
-                      <RefreshCw size={14} className={authLoading ? 'animate-spin' : ''} /> Resend Verification Code
+                      <RefreshCw size={14} className={authLoading ? 'spin' : ''} /> Resend OTP
                     </button>
                   ) : (
-                    <span className="text-xs text-muted" style={{ fontSize: '12px', color: '#94A3B8' }}>
-                      Resend code in <strong style={{ color: '#1A1A2E' }}>{resendTimer}s</strong>
+                    <span className="text-xs text-muted">
+                      Resend OTP in <strong>{resendTimer}s</strong>
                     </span>
                   )}
                 </div>
               </form>
             )}
 
+            {/* ════════════ 2. EMAIL MODE ════════════ */}
+            {authMode === 'EMAIL' && (
+              <div>
+                {/* Email Sub-tabs */}
+                <div className="flex border-b mb-4 text-xs font-bold" style={{ display: 'flex', borderBottom: '1px solid #E2E8F0', marginBottom: '12px' }}>
+                  <button
+                    type="button"
+                    className={`py-2 px-4 ${emailSubTab === 'LOGIN' ? 'border-b-2 border-gold text-charcoal' : 'text-muted'}`}
+                    style={{ border: 'none', background: 'transparent', borderBottom: emailSubTab === 'LOGIN' ? '2px solid #D4A843' : 'none', cursor: 'pointer', padding: '6px 12px' }}
+                    onClick={() => { setEmailSubTab('LOGIN'); setErrorMsg(''); setSuccessMsg(''); }}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    className={`py-2 px-4 ${emailSubTab === 'SIGNUP' ? 'border-b-2 border-gold text-charcoal' : 'text-muted'}`}
+                    style={{ border: 'none', background: 'transparent', borderBottom: emailSubTab === 'SIGNUP' ? '2px solid #D4A843' : 'none', cursor: 'pointer', padding: '6px 12px' }}
+                    onClick={() => { setEmailSubTab('SIGNUP'); setErrorMsg(''); setSuccessMsg(''); }}
+                  >
+                    Create Account
+                  </button>
+                </div>
+
+                {/* EMAIL SIGN IN */}
+                {emailSubTab === 'LOGIN' && (
+                  <form onSubmit={handleEmailLogin} className="auth-form flex flex-col gap-3">
+                    <div className="auth-field">
+                      <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>Email Address *</label>
+                      <div className="auth-input-wrap">
+                        <Mail size={18} className="auth-input-icon" />
+                        <input
+                          type="email"
+                          className="auth-input"
+                          required
+                          placeholder="name@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    <div className="auth-field">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="label" style={{ fontSize: '12px', fontWeight: '700', display: 'block' }}>Password *</label>
+                        <button
+                          type="button"
+                          className="text-xs text-gold font-bold hover:underline"
+                          style={{ fontSize: '11px', color: '#D4A843', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                          onClick={() => { setEmailSubTab('FORGOT'); setErrorMsg(''); setSuccessMsg(''); }}
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
+                      <div className="auth-input-wrap">
+                        <Lock size={18} className="auth-input-icon" />
+                        <input
+                          type="password"
+                          className="auth-input"
+                          required
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn btn-primary btn-md w-full mt-2" disabled={authLoading}>
+                      {authLoading ? 'Signing In...' : 'Sign In'}
+                    </button>
+                  </form>
+                )}
+
+                {/* EMAIL CREATE ACCOUNT */}
+                {emailSubTab === 'SIGNUP' && (
+                  <form onSubmit={handleEmailSignUp} className="auth-form flex flex-col gap-3">
+                    <div className="auth-field">
+                      <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>Full Name *</label>
+                      <div className="auth-input-wrap">
+                        <User size={18} className="auth-input-icon" />
+                        <input
+                          type="text"
+                          className="auth-input"
+                          required
+                          placeholder="Full Name"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    <div className="auth-field">
+                      <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>Email Address *</label>
+                      <div className="auth-input-wrap">
+                        <Mail size={18} className="auth-input-icon" />
+                        <input
+                          type="email"
+                          className="auth-input"
+                          required
+                          placeholder="name@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="auth-field">
+                      <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>Mobile Number (Optional)</label>
+                      <div className="auth-input-wrap">
+                        <Phone size={18} className="auth-input-icon" />
+                        <input
+                          type="tel"
+                          className="auth-input"
+                          placeholder="+91 94473 XXXXX"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="auth-field">
+                      <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>Password (min 8 characters) *</label>
+                      <div className="auth-input-wrap">
+                        <Lock size={18} className="auth-input-icon" />
+                        <input
+                          type="password"
+                          className="auth-input"
+                          required
+                          minLength={8}
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="auth-field">
+                      <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>Confirm Password *</label>
+                      <div className="auth-input-wrap">
+                        <Lock size={18} className="auth-input-icon" />
+                        <input
+                          type="password"
+                          className="auth-input"
+                          required
+                          minLength={8}
+                          placeholder="••••••••"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn btn-primary btn-md w-full mt-2" disabled={authLoading}>
+                      {authLoading ? 'Creating Account...' : 'Create Account'}
+                    </button>
+                  </form>
+                )}
+
+                {/* EMAIL FORGOT PASSWORD */}
+                {emailSubTab === 'FORGOT' && (
+                  <form onSubmit={handleForgotPassword} className="auth-form flex flex-col gap-3">
+                    <div className="auth-field">
+                      <label className="label" style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>Email Address *</label>
+                      <div className="auth-input-wrap">
+                        <Mail size={18} className="auth-input-icon" />
+                        <input
+                          type="email"
+                          className="auth-input"
+                          required
+                          placeholder="name@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn btn-primary btn-md w-full mt-2" disabled={authLoading}>
+                      {authLoading ? 'Sending...' : 'Send Password Reset Link'}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm text-gold mt-1"
+                      style={{ color: '#D4A843', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                      onClick={() => setEmailSubTab('LOGIN')}
+                    >
+                      <ArrowLeft size={14} /> Back to Sign In
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+
             {/* Footer Notice */}
-            <div className="auth-footer-notice">
-              <span>Secured by <strong>Supabase Email Authentication</strong> • Calicut Studio</span>
+            <div className="auth-footer-notice mt-4 text-center">
+              <span className="text-xs text-muted">Secured by <strong>Supabase Authentication</strong> • ScreenArts Calicut</span>
             </div>
           </div>
         )}
@@ -415,3 +610,4 @@ export default function UserLoginModal() {
     </div>
   );
 }
+

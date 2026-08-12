@@ -1,0 +1,71 @@
+.account-page {
+  min-height: 80vh;
+}
+
+.account-hero {
+  background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
+  color: #FFFFFF;
+  padding: 40px 0;
+  border-bottom: 2px solid #D4A843;
+}
+
+.account-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #D4A843;
+  color: #1A1A2E;
+  font-weight: 800;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #FFFFFF;
+}
+
+.account-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .account-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.account-sidebar {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 16px;
+  height: fit-content;
+}
+
+.account-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  font-weight: 700;
+  font-size: 14px;
+  color: #64748B;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.account-nav-btn:hover {
+  background: #FAF7F2;
+  color: #1A1A2E;
+}
+
+.account-nav-btn.active {
+  background: #1A1A2E;
+  color: #D4A843;
+}

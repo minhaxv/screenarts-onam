@@ -20,6 +20,7 @@ import OrdersPage from './pages/OrdersPage';
 import ContactPage from './pages/ContactPage';
 import AdminPage from './pages/AdminPage';
 import DiagnosticsPage from './pages/DiagnosticsPage';
+import AccountPage from './pages/AccountPage';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -51,6 +52,7 @@ function AppContent() {
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/diagnostics" element={<DiagnosticsPage />} />
+          <Route path="/account" element={<AccountPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </main>
